@@ -1,0 +1,79 @@
+# Daily News Agent - Sources Configuration
+# Each source has: name, url, section, and optional keywords for filtering
+
+legal:
+  scotus:
+    - name: "Supreme Court - Official Opinions"
+      url: "https://www.supremecourt.gov/rss/opinions.aspx"
+    - name: "SCOTUSblog"
+      url: "https://www.scotusblog.com/feed/"
+
+  employment_federal:
+    - name: "EEOC Newsroom"
+      url: "https://www.eeoc.gov/newsroom/rss.xml"
+    - name: "Department of Labor News"
+      url: "https://www.dol.gov/rss/releases.xml"
+    - name: "NLRB News"
+      url: "https://www.nlrb.gov/rss.xml"
+    - name: "JD Supra - Employment Law"
+      url: "https://www.jdsupra.com/topics/employment/rss/"
+    - name: "Ogletree Deakins Blog"
+      url: "https://ogletree.com/insights/feed/"
+    - name: "Fisher Phillips Blog"
+      url: "https://www.fisherphillips.com/news-insights/rss/all"
+
+  employment_illinois:
+    - name: "Illinois Department of Employment Security"
+      url: "https://www.illinois.gov/news/feed.rss"
+      keywords: ["employment", "labor", "wage", "IDOL", "worker"]
+    - name: "JD Supra - Illinois Employment"
+      url: "https://www.jdsupra.com/topics/employment/rss/"
+      keywords: ["Illinois", "Chicago", "Cook County"]
+
+  employment_california:
+    - name: "California Labor Commissioner"
+      url: "https://www.dir.ca.gov/rss/dircalendar.rss"
+      keywords: ["employment", "labor", "wage", "AB", "SB", "worker"]
+    - name: "JD Supra - California Employment"
+      url: "https://www.jdsupra.com/topics/employment/rss/"
+      keywords: ["California", "Cal.", "PAGA", "CCPA", "CPRA"]
+
+  privacy_and_ai:
+    - name: "IAPP Privacy News"
+      url: "https://iapp.org/news/rss/"
+    - name: "JD Supra - Data Privacy"
+      url: "https://www.jdsupra.com/topics/privacy/rss/"
+    - name: "JD Supra - Artificial Intelligence"
+      url: "https://www.jdsupra.com/topics/artificial-intelligence/rss/"
+    - name: "Future of Privacy Forum"
+      url: "https://fpf.org/feed/"
+
+local:
+  - name: "Forest Park Review"
+    url: "https://forestparkreview.com/feed/"
+  - name: "Wednesday Journal - Oak Park"
+    url: "https://www.oakpark.com/feed/"
+  - name: "Patch - Oak Park"
+    url: "https://patch.com/illinois/oakpark/rss.xml"
+  - name: "Patch - Forest Park"
+    url: "https://patch.com/illinois/forestpark/rss.xml"
+
+national:
+  - name: "AP News - Top Stories"
+    url: "https://rsshub.app/apnews/topics/apf-topnews"
+  - name: "AP News - Politics"
+    url: "https://rsshub.app/apnews/topics/apf-politics"
+  - name: "Reuters - Top News"
+    url: "https://feeds.reuters.com/reuters/topNews"
+  - name: "NPR News"
+    url: "https://feeds.npr.org/1001/rss.xml"
+  - name: "PBS NewsHour"
+    url: "https://www.pbs.org/newshour/feeds/rss/headlines"
+
+# Ticketmaster / concert settings
+concerts:
+  city: "Chicago"
+  state_code: "IL"
+  dma_id: "324"          # Ticketmaster DMA for Chicago
+  radius_miles: 50
+  days_ahead: 90         # Look 90 days out for new shows
