@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Playoff Ticker</string>
+    <string name="widget_title">Playoff Ticker</string>
+    <string name="widget_description">Live NBA &amp; NHL playoff series ticker</string>
+    <string name="widget_empty">No active playoff series.\nTap ↻ to refresh.</string>
+    <string name="refresh">Refresh</string>
+</resources>
