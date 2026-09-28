@@ -678,9 +678,9 @@
             </button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <button class="window-btn" style="height:72px;opacity:0.3;cursor:not-allowed;">
-                <span class="window-title" style="color:#c4b5fd;font-size:1rem;">Program</span>
-                <span class="window-sub">Coming Soon</span>
+            <button onclick="openCoach()" class="window-btn" style="height:72px;border-color:var(--amber);">
+                <span class="window-title" style="color:var(--amber);font-size:1rem;">⚡ Coach</span>
+                <span class="window-sub">Ask Claude</span>
             </button>
             <button class="window-btn" style="height:72px;opacity:0.3;cursor:not-allowed;">
                 <span class="window-title" style="color:#fca5a5;font-size:1rem;">Fueling</span>
@@ -892,7 +892,7 @@
         <button class="analytics-tab active" onclick="switchAnalyticsTab('exercise',this)">Exercise</button>
         <button id="analytics-day-tab-btn" class="analytics-tab" onclick="switchAnalyticsTab('day',this)">By Day</button>
         <button class="analytics-tab" onclick="switchAnalyticsTab('muscle',this)">Muscle</button>
-        <button class="analytics-tab" onclick="switchAnalyticsTab('ai',this)">⚡ Coach</button>
+        <button id="analytics-ai-tab-btn" class="analytics-tab" onclick="switchAnalyticsTab('ai',this)">⚡ Coach</button>
     </div>
 
     <!-- EXERCISE TAB -->
@@ -3055,6 +3055,10 @@ window.switchAnalyticsTab = function(tab, btn) {
     if (tab === 'muscle') renderMuscleTab();
     if (tab === 'day') renderDayTabInit();
     if (tab === 'ai') { var key = localStorage.getItem(AI_KEY_STORE); document.getElementById('ai-no-key').classList.toggle('hidden', !!key); }
+};
+window.openCoach = function() {
+    navTo('view-analytics');
+    switchAnalyticsTab('ai', document.getElementById('analytics-ai-tab-btn'));
 };
 
 window.renderExerciseAnalytics = function(query) {
