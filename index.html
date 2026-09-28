@@ -71,9 +71,7 @@ img,svg,canvas{display:block}
     radial-gradient(55% 38% at 50% 0%,rgba(255,96,0,.24),transparent 70%),
     radial-gradient(38% 30% at 100% 35%,rgba(255,170,60,.07),transparent 70%),
     radial-gradient(45% 35% at 0% 85%,rgba(110,150,200,.07),transparent 70%);
-  animation:drift 26s ease-in-out infinite alternate}
-.ambient::after{content:'';position:absolute;inset:0;opacity:.07;mix-blend-mode:overlay;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+}
 body.light .ambient::before{background:radial-gradient(55% 38% at 50% 0%,rgba(255,120,30,.16),transparent 70%),radial-gradient(45% 35% at 0% 85%,rgba(110,150,200,.10),transparent 70%)}
 .ambient-embers{position:absolute;inset:0}
 .ambient-embers i{position:absolute;bottom:-10px;width:3px;height:3px;border-radius:50%;background:var(--ember-2);box-shadow:0 0 8px 2px rgba(255,140,40,.7);opacity:0;animation:float-ember linear infinite}
@@ -418,11 +416,11 @@ textarea.input{height:auto;min-height:56px;padding:14px 16px;resize:none;line-he
 .bar-fill{height:100%;width:0;border-radius:6px;background:var(--heat);transition:width 1.1s var(--ease)}
 
 /* ---------- segmented control ---------- */
-.seg{position:relative;display:grid;grid-template-columns:repeat(4,1fr);padding:4px;border-radius:18px;background:var(--surface);border:1px solid var(--line);margin-bottom:18px}
+.seg{position:relative;display:grid;grid-template-columns:repeat(3,1fr);padding:4px;border-radius:18px;background:var(--surface);border:1px solid var(--line);margin-bottom:18px}
 .seg button{position:relative;z-index:1;height:42px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);transition:color .3s}
 .seg button.on{color:var(--on-heat)}
 .seg button .ico{width:16px;height:16px}
-.seg-ind{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/4);border-radius:14px;background:var(--heat);box-shadow:0 8px 20px -8px rgba(255,90,0,.8);transition:transform .5s var(--spring)}
+.seg-ind{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/3);border-radius:14px;background:var(--heat);box-shadow:0 8px 20px -8px rgba(255,90,0,.8);transition:transform .5s var(--spring)}
 
 /* ---------- heat map ---------- */
 .heat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -632,7 +630,7 @@ body.light .toast{background:rgba(255,253,249,.96);color:#1b140d;box-shadow:0 20
 .app-error{display:none;position:fixed;left:10px;right:10px;bottom:calc(90px + env(safe-area-inset-bottom));z-index:9999;max-height:40vh;overflow:auto;padding:12px 14px;border-radius:14px;background:rgba(60,10,8,.95);border:1px solid rgba(255,93,82,.5);color:#ffd4d0;font-family:var(--f-mono);font-size:.72rem;line-height:1.5}
 .skeleton{background:linear-gradient(90deg,var(--surface) 0%,var(--surface-3) 50%,var(--surface) 100%);background-size:200% 100%;animation:skel 1.4s infinite}
 @keyframes skel{to{background-position:-200% 0}}
-body.typing .dock{transform:translate(-50%,170%)}
+body.kb-open .dock{transform:translate(-50%,170%)}
 
 @media (hover:hover){
   .row:hover,.cat:hover,.match:hover,.day-card:hover,.choice:hover{border-color:var(--line-3)}
@@ -648,11 +646,28 @@ body.typing .dock{transform:translate(-50%,170%)}
   .ambient-embers{display:none}
 }
 
+/* ---- coach: saved chats ---- */
+.coach-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#view-coach .tb-titles,#view-coach-chats .tb-titles{min-width:0;flex:1}
+.chat-group{margin:20px 4px 8px}
+.chat-group:first-child{margin-top:4px}
+.chat-row{display:flex;align-items:center;gap:4px;padding:4px 6px 4px 4px;margin-bottom:6px;border-radius:var(--r-md,16px);background:var(--surface);border:1px solid var(--line)}
+.chat-row.on{border-color:rgba(255,122,26,.55)}
+.chat-open{flex:1;min-width:0;text-align:left;padding:10px 10px}
+.chat-open .row-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.suggest button{text-align:left}
+
+/* keep every screen at phone width, even with very long titles */
+.view{min-width:0;max-width:100%}
+.topbar .tb-titles{overflow:hidden}
+.chat,.composer{min-width:0;max-width:100%}
+.msg{overflow-wrap:anywhere}
+
 </style>
 </head>
 <body>
 <div id="app-error" class="app-error"></div>
-<div class="ambient" aria-hidden="true"><div class="ambient-embers" id="ambient-embers"></div></div>
+<div class="ambient" aria-hidden="true"></div>
 
 <!-- ICONS + SHARED GRADIENTS -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -696,6 +711,8 @@ body.typing .dock{transform:translate(-50%,170%)}
   <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9M4 13a8 8 0 0 0 14.3 4.9"/><path d="M4 3.5V7h3.5M20 20.5V17h-3.5"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
   <symbol id="i-fork" viewBox="0 0 24 24"><path d="M7 3v7.5a2 2 0 0 0 4 0V3M9 12.5V21M16.5 21v-7.5M16.5 3c-2.2 1.5-2.8 6-1 8.5h1V3z"/></symbol>
+  <symbol id="i-bar-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 14.5a2.5 2.5 0 0 1-2.5 2.5H9l-5 4V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5z"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16.5 6.5l2.5 2.5"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.5v.01"/></symbol>
@@ -715,20 +732,18 @@ body.typing .dock{transform:translate(-50%,170%)}
     <div id="onboard-step-1" class="onb-step">
       <div class="onb-body">
         <div class="wordmark rise"><div class="mark"></div><div><b>Big Sunny's</b><small>Powerlifting App</small></div></div>
-        <div class="onb-art rise" data-lifter="squat"></div>
-        <p class="eyebrow rise">Welcome to the forge</p>
-        <h1 class="title-xl rise mt-8">Who's<br>lifting?</h1>
-        <p class="sub rise mt-12">First name is plenty. This is a training log, not the IRS.</p>
+        <p class="eyebrow rise mt-32">Step 1 of 4</p>
+        <h1 class="title-xl rise mt-8">What's your<br>name?</h1>
         <input id="onboard-name" class="input input-xl rise mt-24" placeholder="Your name" autocomplete="off" autocapitalize="words" enterkeyhint="next">
       </div>
-      <div class="onb-actions"><button class="btn btn-heat btn-xl knurl" data-act="onbNext" data-step="1">Let's go <svg class="ico"><use href="#i-arrow"/></svg></button></div>
+      <div class="onb-actions"><button class="btn btn-heat btn-xl" data-act="onbNext" data-step="1">Next <svg class="ico"><use href="#i-arrow"/></svg></button></div>
     </div>
 
     <div id="onboard-step-2" class="onb-step hidden">
       <div class="onb-body">
         <p class="eyebrow rise">Step 2 of 4</p>
-        <h1 class="title-xl rise mt-8">Weigh<br>in</h1>
-        <p class="sub rise mt-12">Powers your Wilks score and bodyweight ratios. It never leaves this phone.</p>
+        <h1 class="title-xl rise mt-8">Units and<br>bodyweight</h1>
+        <p class="sub rise mt-12">Used for your Wilks score. Stored only on this phone.</p>
         <p class="label rise mt-32 mb-12">Units</p>
         <div class="pillset rise" style="width:max-content" id="onb-units"><button class="on" data-act="onbUnit" data-u="lbs">LBS</button><button data-act="onbUnit" data-u="kg">KG</button></div>
         <p class="label rise mt-24 mb-12">Bodyweight</p>
@@ -744,15 +759,15 @@ body.typing .dock{transform:translate(-50%,170%)}
       <div class="onb-body">
         <p class="eyebrow rise">Step 3 of 4</p>
         <h1 class="title-xl rise mt-8">How do<br>you train?</h1>
-        <p class="sub rise mt-12">No wrong answer. You can switch anytime in Settings.</p>
+        <p class="sub rise mt-12">You can change this later in Settings.</p>
         <div class="stack mt-24">
           <button class="choice rise" data-act="onbNext" data-step="3" data-choice="program">
             <span class="ch-ico"><svg class="ico ico-lg"><use href="#i-cal"/></svg></span>
-            <span><span class="ch-title">I run a program</span><span class="ch-sub" style="display:block">Named days, set splits, the whole ritual.</span></span>
+            <span><span class="ch-title">I follow a program</span><span class="ch-sub" style="display:block">Named training days, each with its own muscle groups</span></span>
           </button>
           <button class="choice rise" data-act="onbNext" data-step="3" data-choice="free">
             <span class="ch-ico"><svg class="ico ico-lg"><use href="#i-bolt"/></svg></span>
-            <span><span class="ch-title">I freestyle</span><span class="ch-sub" style="display:block">Walk in, pick a lift, log it. No homework.</span></span>
+            <span><span class="ch-title">I train freely</span><span class="ch-sub" style="display:block">Log any exercise, no set days</span></span>
           </button>
         </div>
       </div>
@@ -762,8 +777,8 @@ body.typing .dock{transform:translate(-50%,170%)}
     <div id="onboard-step-4" class="onb-step hidden">
       <div class="onb-body">
         <p class="eyebrow rise">Step 4 of 4</p>
-        <h1 class="title-xl rise mt-8">Build<br>your week</h1>
-        <p class="sub rise mt-12">Pick how many days, then name each one and tap what it hits.</p>
+        <h1 class="title-xl rise mt-8">Set up your<br>program</h1>
+        <p class="sub rise mt-12">Choose the number of days, then name each day and pick its muscle groups.</p>
         <p class="label rise mt-24 mb-12">Days per week</p>
         <div class="count-row rise" id="onb-daycount">
           <button id="dc-2" data-act="onbDayCount" data-n="2">2</button><button id="dc-3" data-act="onbDayCount" data-n="3">3</button><button id="dc-4" data-act="onbDayCount" data-n="4">4</button><button id="dc-5" class="on" data-act="onbDayCount" data-n="5">5</button><button id="dc-6" data-act="onbDayCount" data-n="6">6</button><button id="dc-7" data-act="onbDayCount" data-n="7">7</button>
@@ -772,18 +787,17 @@ body.typing .dock{transform:translate(-50%,170%)}
       </div>
       <div class="onb-actions">
         <button class="btn btn-line" data-act="onbBack" data-step="4" aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
-        <button class="btn btn-heat btn-xl" data-act="onbNext" data-step="4">Build it <svg class="ico"><use href="#i-arrow"/></svg></button>
+        <button class="btn btn-heat btn-xl" data-act="onbNext" data-step="4">Next <svg class="ico"><use href="#i-arrow"/></svg></button>
       </div>
     </div>
 
     <div id="onboard-step-5" class="onb-step hidden">
       <div class="onb-body center">
-        <div class="onb-art rise" data-lifter="deadlift"></div>
-        <p class="eyebrow rise">Setup complete</p>
+        <p class="eyebrow rise mt-32">Setup complete</p>
         <h1 id="onboard-done-title" class="title-xl rise mt-8">You're all set.</h1>
-        <p id="onboard-done-sub" class="sub rise mt-12">Time to earn it.</p>
+        <p id="onboard-done-sub" class="sub rise mt-12"></p>
       </div>
-      <div class="onb-actions"><button class="btn btn-heat btn-xl knurl" data-act="finishOnboarding">Enter the gym <svg class="ico"><use href="#i-arrow"/></svg></button></div>
+      <div class="onb-actions"><button class="btn btn-heat btn-xl" data-act="finishOnboarding">Start <svg class="ico"><use href="#i-arrow"/></svg></button></div>
     </div>
   </div>
 </section>
@@ -792,17 +806,15 @@ body.typing .dock{transform:translate(-50%,170%)}
 <section id="view-landing" class="view hidden">
   <div class="brandbar">
     <div class="wordmark"><div class="mark"></div><div><b>Big Sunny's</b><small>Powerlifting App</small></div></div>
-    <button class="icon-btn" data-act="toggleSoundQuick" id="sound-quick" aria-label="Toggle sound"><svg class="ico"><use href="#i-sound"/></svg></button>
+    <button class="icon-btn" data-act="nav" data-to="view-settings" aria-label="Settings"><svg class="ico"><use href="#i-sliders"/></svg></button>
   </div>
 
   <div class="greet">
     <p class="eyebrow" id="greet-eyebrow">Good evening</p>
     <h1 class="title-xl" id="greet-title">Big Sunny</h1>
-    <p class="quip" id="greet-quip"></p>
   </div>
 
   <div class="hero" id="hero">
-    <div class="hero-hint" id="hero-hint">Drag to spin · tap to swap</div>
     <div class="hero-hud">
       <div>
         <p class="eyebrow" id="hud-label">Best squat</p>
@@ -819,18 +831,17 @@ body.typing .dock{transform:translate(-50%,170%)}
 
   <button id="active-session-banner" class="live-card hidden mb-12" data-act="resumeActiveSession">
     <div class="grow">
-      <span class="live-tag"><i class="live-dot"></i>Session in progress</span>
+      <span class="live-tag">Workout paused</span>
       <p class="h3 mt-8" id="active-session-name"></p>
       <p class="small muted mt-4" id="active-session-text"></p>
     </div>
     <span class="btn btn-heat btn-sm" style="pointer-events:none"><svg class="ico ico-sm"><use href="#i-play"/></svg>Resume</span>
   </button>
 
-  <button class="btn btn-heat btn-xl btn-block knurl" data-act="openWorkoutInit" id="cta-train">
-    <svg class="ico ico-lg"><use href="#i-bar"/></svg><span id="cta-label">Step up to the bar</span>
+  <button class="btn btn-heat btn-xl btn-block" data-act="openWorkoutInit" id="cta-train">
+    <svg class="ico ico-lg"><use href="#i-bar"/></svg><span id="cta-label">Start workout</span>
   </button>
 
-  <div class="grid-3 mt-16" id="landing-stats"></div>
 
   <div id="last-wrap">
     <div class="section-title"><span class="label">Last session</span></div>
@@ -841,46 +852,14 @@ body.typing .dock{transform:translate(-50%,170%)}
     </button>
   </div>
 
-  <div class="section-title"><span class="label">The gym</span></div>
-  <div class="grid-2">
-    <button class="tile" style="--acc:108,186,255" data-act="nav" data-to="view-search">
-      <span class="tile-ico"><svg class="ico"><use href="#i-history"/></svg></span>
-      <span><span class="tile-title">Archive</span><span class="tile-sub" style="display:block">Every rep, receipts included</span></span>
-      <svg class="ico ico-sm tile-arrow"><use href="#i-chev"/></svg>
-    </button>
-    <button class="tile" style="--acc:255,122,26" data-act="nav" data-to="view-analytics">
-      <span class="tile-ico"><svg class="ico"><use href="#i-flask"/></svg></span>
-      <span><span class="tile-title">The Lab</span><span class="tile-sub" style="display:block">Charts, trends &amp; the Coach</span></span>
-      <svg class="ico ico-sm tile-arrow"><use href="#i-chev"/></svg>
-    </button>
-    <button class="tile" style="--acc:255,199,102" data-act="openCoach">
-      <span class="tile-ico"><svg class="ico"><use href="#i-bolt"/></svg></span>
-      <span><span class="tile-title">Coach</span><span class="tile-sub" style="display:block">Ask Claude. It has read everything.</span></span>
-      <svg class="ico ico-sm tile-arrow"><use href="#i-chev"/></svg>
-    </button>
-    <button class="tile locked" style="--acc:255,93,110" data-act="comingSoon" data-what="Fueling">
-      <span class="tape">Coming soon</span>
-      <span class="tile-ico"><svg class="ico"><use href="#i-fork"/></svg></span>
-      <span><span class="tile-title">Fueling</span><span class="tile-sub" style="display:block">Eat like you lift</span></span>
-    </button>
-  </div>
-
-  <div class="grid-2 mt-12">
-    <button class="btn btn-line btn-sm" data-act="exportData"><svg class="ico ico-sm"><use href="#i-download"/></svg>Export</button>
-    <button class="btn btn-line btn-sm" data-act="importData"><svg class="ico ico-sm"><use href="#i-upload"/></svg>Import</button>
-  </div>
-
-  <p class="foot-note"><b>BIG SUNNY'S</b>Forged in Forest Park. Chalk not included.</p>
 </section>
 
 <!-- ================= ARCHIVE ================= -->
 <section id="view-search" class="view hidden">
   <div class="page-head">
-    <p class="eyebrow">Archive</p>
-    <h1 class="title-xl">The<br>receipts</h1>
-    <p class="sub">Every rep you've logged. Like your memory, but it doesn't round up.</p>
+    <h1 class="title-xl">Archive</h1>
   </div>
-  <button class="fake-search" data-act="focusSearch"><svg class="ico"><use href="#i-search"/></svg>Search any lift<kbd>sq · bp · dl</kbd></button>
+  <button class="fake-search" data-act="focusSearch"><svg class="ico"><use href="#i-search"/></svg>Search exercises</button>
 
   <div class="section-title"><span class="label">Most logged</span></div>
   <div class="chip-row" id="hub-top-lifts"></div>
@@ -889,7 +868,7 @@ body.typing .dock{transform:translate(-50%,170%)}
     <div class="section-title"><span class="label">Browse by day</span></div>
     <button id="search-day-btn" class="tile" style="--acc:185,160,255;min-height:108px;width:100%" data-act="nav" data-to="view-search-day">
       <span class="tile-ico"><svg class="ico"><use href="#i-cal"/></svg></span>
-      <span><span class="tile-title">Search workout day</span><span class="tile-sub" style="display:block">Every Day 1, every Day 2, all of it</span></span>
+      <span><span class="tile-title">Search workout day</span><span class="tile-sub" style="display:block">Browse past sessions by program day</span></span>
       <svg class="ico ico-sm tile-arrow"><use href="#i-chev"/></svg>
     </button>
     <div id="last-time-section">
@@ -909,7 +888,7 @@ body.typing .dock{transform:translate(-50%,170%)}
   </div>
   <div class="search-field">
     <svg class="ico"><use href="#i-search"/></svg>
-    <input id="searchInput" class="input" placeholder="Squat, bench, rope..." autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    <input id="searchInput" class="input" placeholder="Exercise name" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
     <button class="icon-btn sm ghost clear hidden" id="search-clear" data-act="clearSearch" aria-label="Clear"><svg class="ico"><use href="#i-x"/></svg></button>
   </div>
   <div id="search-dropdown" class="rows mt-12 hidden"></div>
@@ -937,35 +916,31 @@ body.typing .dock{transform:translate(-50%,170%)}
 <section id="view-workout-init" class="view focus-mode hidden">
   <div class="topbar">
     <button class="icon-btn" data-act="back" data-to="view-landing" aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
-    <div class="tb-titles"><p class="eyebrow">New session</p><p class="h2">Pick your poison</p></div>
+    <div class="tb-titles"><p class="h2">Start workout</p></div>
   </div>
-  <div class="page-head">
-    <h1 class="title-xl">What are we<br>hitting today?</h1>
-    <p class="sub" id="init-sub">Pick today's session.</p>
-  </div>
+  <p class="sub mb-16" id="init-sub">Choose today's session.</p>
   <div id="session-day-buttons" class="stack"></div>
-  <div class="onb-art mt-24" data-lifter="deadlift"></div>
 </section>
 
 <section id="view-workout-cats" class="view focus-mode hidden">
   <div class="sessionbar">
     <button class="icon-btn sm" data-act="pauseWorkout" aria-label="Back (pauses session)"><svg class="ico"><use href="#i-back"/></svg></button>
-    <div class="sb-mid"><p class="sb-name" id="session-title">Session</p><p class="sb-meta"><i class="live-dot"></i><span class="js-elapsed">Live</span><span>·</span><span class="js-setcount">0 sets</span></p></div>
+    <div class="sb-mid"><p class="sb-name" id="session-title">Session</p><p class="sb-meta"><span class="js-setcount">0 sets</span></p></div>
     <button class="icon-btn sm accent" data-act="pauseWorkout" aria-label="Pause"><svg class="ico"><use href="#i-pause"/></svg></button>
     <button class="btn btn-heat btn-xs" data-act="finishWorkout"><svg class="ico ico-sm"><use href="#i-flag"/></svg>Finish</button>
   </div>
-  <div class="page-head"><p class="eyebrow">Add exercise</p><h1 class="title">Choose your weapon</h1></div>
+  <div class="page-head"><h1 class="title">Choose a muscle group</h1></div>
   <div id="primary-cats" class="cat-grid"></div>
   <button id="other-cats-btn" class="more-toggle" data-act="toggleOtherCats"><span>More groups</span><svg class="ico ico-sm"><use href="#i-chevd"/></svg></button>
   <div id="other-cats" class="cat-grid mt-12 hidden"></div>
   <div id="cats-session-log"></div>
-  <button class="scrap" data-act="cancelWorkout"><svg class="ico ico-sm"><use href="#i-trash"/></svg>Scrap this session</button>
+  <button class="scrap" data-act="cancelWorkout"><svg class="ico ico-sm"><use href="#i-trash"/></svg>Cancel workout</button>
 </section>
 
 <section id="view-exercise-select" class="view focus-mode hidden">
   <div class="sessionbar">
     <button class="icon-btn sm" data-act="back" data-to="view-workout-cats" aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
-    <div class="sb-mid"><p class="sb-name js-session-name">Session</p><p class="sb-meta"><i class="live-dot"></i><span class="js-elapsed">Live</span><span>·</span><span class="js-setcount">0 sets</span></p></div>
+    <div class="sb-mid"><p class="sb-name js-session-name">Session</p><p class="sb-meta"><span class="js-setcount">0 sets</span></p></div>
     <button class="icon-btn sm accent" data-act="pauseWorkout" aria-label="Pause"><svg class="ico"><use href="#i-pause"/></svg></button>
     <button class="btn btn-heat btn-xs" data-act="finishWorkout"><svg class="ico ico-sm"><use href="#i-flag"/></svg>Finish</button>
   </div>
@@ -973,20 +948,20 @@ body.typing .dock{transform:translate(-50%,170%)}
     <div id="cat-plate"></div>
     <div><p class="eyebrow" id="cat-eyebrow">Muscle group</p><h1 class="title" id="cat-header">Group</h1></div>
   </div>
-  <p class="hint"><svg class="ico ico-sm"><use href="#i-move"/></svg>Tap to log · hold to move to another group</p>
+  <p class="hint"><svg class="ico ico-sm"><use href="#i-move"/></svg>Tap to log. Press and hold to move to another group.</p>
   <div id="exercise-list" class="rows"></div>
 </section>
 
 <section id="view-logger" class="view focus-mode hidden">
   <div class="sessionbar">
     <button class="icon-btn sm" data-act="back" data-to="view-workout-cats" aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
-    <div class="sb-mid"><p class="sb-name js-session-name">Session</p><p class="sb-meta"><i class="live-dot"></i><span class="js-elapsed">Live</span><span>·</span><span class="js-setcount">0 sets</span></p></div>
+    <div class="sb-mid"><p class="sb-name js-session-name">Session</p><p class="sb-meta"><span class="js-setcount">0 sets</span></p></div>
     <button class="icon-btn sm" data-act="back" data-to="view-workout-cats" aria-label="Add another lift"><svg class="ico"><use href="#i-plus"/></svg></button>
     <button class="icon-btn sm accent" data-act="pauseWorkout" aria-label="Pause"><svg class="ico"><use href="#i-pause"/></svg></button>
     <button class="btn btn-heat btn-xs" data-act="finishWorkout"><svg class="ico ico-sm"><use href="#i-flag"/></svg>Finish</button>
   </div>
   <div class="lift-head">
-    <p class="eyebrow" id="logger-eyebrow">Now lifting</p>
+    <p class="eyebrow" id="logger-eyebrow"></p>
     <h1 class="lift-name" id="logger-exercise-name">Squat</h1>
     <div class="lift-meta">
       <span class="badge gold hidden" id="logger-pr-display"></span>
@@ -1010,25 +985,23 @@ body.typing .dock{transform:translate(-50%,170%)}
       <div class="steps"><button class="step" data-step-target="log-weight" data-delta="-w" aria-label="Less weight"><svg class="ico"><use href="#i-minus"/></svg></button><button class="step" data-step-target="log-weight" data-delta="w" aria-label="More weight"><svg class="ico"><use href="#i-plus"/></svg></button></div>
     </div>
   </div>
-  <div class="notes-field"><input id="log-notes" class="input" placeholder="Notes: tempo, cues, how it felt" enterkeyhint="done"></div>
+  <div class="notes-field"><input id="log-notes" class="input" placeholder="Notes (optional)" enterkeyhint="done"></div>
   <div class="live-calc hidden" id="live-calc"><div class="plates-viz" id="plates-viz"></div><div class="calc-text" id="calc-text"></div></div>
-  <button class="btn btn-heat btn-xl btn-block knurl logset" id="logset-btn" data-act="saveSet"><svg class="ico ico-lg"><use href="#i-bolt"/></svg>Log set</button>
+  <button class="btn btn-heat btn-xl btn-block logset" id="logset-btn" data-act="saveSet"><svg class="ico ico-lg"><use href="#i-check"/></svg>Log set</button>
   <div id="session-sets-list" class="mt-24"></div>
-  <button class="scrap" data-act="cancelWorkout"><svg class="ico ico-sm"><use href="#i-trash"/></svg>Scrap this session</button>
+  <button class="scrap" data-act="cancelWorkout"><svg class="ico ico-sm"><use href="#i-trash"/></svg>Cancel workout</button>
 </section>
 
 <!-- ================= THE LAB ================= -->
 <section id="view-analytics" class="view hidden">
   <div class="page-head">
-    <p class="eyebrow">The Lab</p>
-    <h1 class="title-xl">Where feelings<br>get fact-checked</h1>
+    <h1 class="title-xl">Lab</h1>
   </div>
   <div class="seg" id="lab-seg">
     <div class="seg-ind" id="seg-ind"></div>
     <button class="on" data-act="analyticsTab" data-tab="exercise">Lifts</button>
     <button data-act="analyticsTab" data-tab="day" id="analytics-day-tab-btn">Days</button>
     <button data-act="analyticsTab" data-tab="muscle">Muscles</button>
-    <button data-act="analyticsTab" data-tab="ai"><svg class="ico"><use href="#i-spark"/></svg>Coach</button>
   </div>
 
   <div id="atab-exercise" class="analytics-panel">
@@ -1046,36 +1019,47 @@ body.typing .dock{transform:translate(-50%,170%)}
     <div id="analytics-sbd-wrap" class="mt-12"></div>
   </div>
 
-  <div id="atab-ai" class="analytics-panel hidden">
-    <div class="card edge coach-head">
-      <div class="coach-avatar"><svg class="ico ico-lg"><use href="#i-bolt"/></svg></div>
-      <div class="grow"><p class="h3">The Coach</p><p class="small muted" id="coach-sub">Has read every set you've logged.</p></div>
-      <button class="icon-btn sm" data-act="coachReset" aria-label="New conversation"><svg class="ico"><use href="#i-refresh"/></svg></button>
-    </div>
-    <div id="ai-no-key" class="card pad mb-12 hidden">
-      <p class="h3">Coach needs a key</p>
-      <p class="sub mt-8">Add your Claude API key in Settings and I'll start reading your training log. It's stored on this device only.</p>
-      <button class="btn btn-line btn-sm mt-12" data-act="nav" data-to="view-settings"><svg class="ico ico-sm"><use href="#i-key"/></svg>Open Settings</button>
-    </div>
-    <div id="coach-suggest" class="suggest"></div>
-    <div id="ai-chat-history" class="chat"></div>
-    <div class="composer">
-      <textarea id="ai-chat-input" rows="1" placeholder="Ask your coach anything..." enterkeyhint="send"></textarea>
-      <button class="send" data-act="sendCoach" id="coach-send" aria-label="Send"><svg class="ico"><use href="#i-send"/></svg></button>
-    </div>
+</section>
+
+
+<!-- ================= COACH ================= -->
+<section id="view-coach" class="view hidden">
+  <div class="topbar">
+    <button class="icon-btn" data-act="nav" data-to="view-coach-chats" aria-label="Saved chats"><svg class="ico"><use href="#i-list"/></svg></button>
+    <div class="tb-titles"><p class="eyebrow" id="coach-model-label">Coach</p><p class="h2 coach-title" id="coach-title">New chat</p></div>
+    <button class="icon-btn" data-act="coachNew" aria-label="New chat"><svg class="ico"><use href="#i-edit"/></svg></button>
   </div>
+  <div id="ai-no-key" class="card pad mb-12 hidden">
+    <p class="h3">Add your API key</p>
+    <p class="sub mt-8">The coach needs a Claude API key. Add it in Settings; it's stored only on this phone.</p>
+    <button class="btn btn-line btn-sm mt-12" data-act="nav" data-to="view-settings"><svg class="ico ico-sm"><use href="#i-key"/></svg>Open Settings</button>
+  </div>
+  <div id="coach-suggest" class="suggest"></div>
+  <div id="ai-chat-history" class="chat"></div>
+  <div class="composer">
+    <textarea id="ai-chat-input" rows="1" placeholder="Message the coach" enterkeyhint="send"></textarea>
+    <button class="send" data-act="sendCoach" id="coach-send" aria-label="Send"><svg class="ico"><use href="#i-send"/></svg></button>
+  </div>
+</section>
+
+<section id="view-coach-chats" class="view hidden">
+  <div class="topbar">
+    <button class="icon-btn" data-act="back" data-to="view-coach" aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+    <div class="tb-titles"><p class="h2">Chats</p></div>
+    <button class="btn btn-heat btn-xs" data-act="coachNew"><svg class="ico ico-sm"><use href="#i-plus"/></svg>New chat</button>
+  </div>
+  <div class="search-field"><svg class="ico"><use href="#i-search"/></svg><input id="coach-chat-search" class="input" placeholder="Search chats" autocomplete="off"></div>
+  <div id="coach-chat-list" class="mt-12"></div>
 </section>
 
 <!-- ================= SETTINGS ================= -->
 <section id="view-settings" class="view hidden">
   <div class="page-head">
-    <p class="eyebrow">Settings</p>
-    <h1 class="title-xl">The<br>workshop</h1>
-    <p class="sub">Tune the machine. Changes stay on this device.</p>
+    <h1 class="title-xl">Settings</h1>
   </div>
 
   <div class="group">
-    <div class="group-head"><span class="gi"><svg class="ico"><use href="#i-user"/></svg></span><div><p class="h3">The lifter</p><p class="tiny">Name, bodyweight, units</p></div></div>
+    <div class="group-head"><span class="gi"><svg class="ico"><use href="#i-user"/></svg></span><div><p class="h3">Profile</p><p class="tiny">Name, bodyweight, units</p></div></div>
     <div class="list">
       <div class="list-row"><div><p class="lr-t">Name</p></div><input id="settings-name" class="inline-input" autocomplete="off"></div>
       <div class="list-row"><div><p class="lr-t">Bodyweight</p><p class="lr-s">For Wilks and ratios</p></div><div class="row-flex"><input id="settings-bw" type="number" inputmode="decimal" class="inline-input short"><span id="settings-unit-label" class="muted small">lbs</span></div></div>
@@ -1085,11 +1069,11 @@ body.typing .dock{transform:translate(-50%,170%)}
   </div>
 
   <div class="group">
-    <div class="group-head"><span class="gi"><svg class="ico"><use href="#i-sliders"/></svg></span><div><p class="h3">How it behaves</p><p class="tiny">Look, sound, feel, math</p></div></div>
+    <div class="group-head"><span class="gi"><svg class="ico"><use href="#i-sliders"/></svg></span><div><p class="h3">Preferences</p><p class="tiny">Display, sound, logging</p></div></div>
     <div class="list">
-      <div class="list-row"><div><p class="lr-t">Dark mode</p><p class="lr-s">Forge by night, chalk by day</p></div><button id="theme-toggle" class="toggle on" data-act="toggleTheme" aria-label="Dark mode"></button></div>
-      <div class="list-row"><div><p class="lr-t">Sound effects</p><p class="lr-s">Clanks, thuds, and one very proud gong</p></div><button id="sound-toggle" class="toggle on" data-act="toggleSound" aria-label="Sound"></button></div>
-      <div class="list-row"><div><p class="lr-t">Haptics</p><p class="lr-s">Buzz on sets and PRs (Android)</p></div><button id="haptic-toggle" class="toggle on" data-act="toggleHaptics" aria-label="Haptics"></button></div>
+      <div class="list-row"><div><p class="lr-t">Dark mode</p></div><button id="theme-toggle" class="toggle on" data-act="toggleTheme" aria-label="Dark mode"></button></div>
+      <div class="list-row"><div><p class="lr-t">Sound effects</p></div><button id="sound-toggle" class="toggle on" data-act="toggleSound" aria-label="Sound"></button></div>
+      <div class="list-row"><div><p class="lr-t">Haptics</p><p class="lr-s">Vibrate on logged sets and PRs (Android only)</p></div><button id="haptic-toggle" class="toggle on" data-act="toggleHaptics" aria-label="Haptics"></button></div>
       <div class="list-row"><div><p class="lr-t">Rest timer</p><p class="lr-s">Starts after every logged set</p></div><button id="rest-toggle" class="toggle" data-act="toggleRestTimer" aria-label="Rest timer"></button></div>
       <div class="list-row hidden" id="rest-duration-row"><div><p class="lr-t">Rest duration</p><p class="lr-s">Seconds</p></div><input id="rest-duration" type="number" inputmode="numeric" class="inline-input short" value="90" min="10" max="600"></div>
       <div class="list-row"><div><p class="lr-t">1RM formula</p><p class="lr-s">How estimated maxes are calculated</p></div><div class="select-wrap"><select id="e1rm-formula"><option value="epley">Epley</option><option value="brzycki">Brzycki</option><option value="lander">Lander</option><option value="lombardi">Lombardi</option></select></div></div>
@@ -1108,14 +1092,14 @@ body.typing .dock{transform:translate(-50%,170%)}
   </div>
 
   <div class="group">
-    <div class="group-head"><span class="gi"><svg class="ico"><use href="#i-key"/></svg></span><div><p class="h3">The Coach</p><p class="tiny">API key, model, and the rules it coaches by</p></div></div>
+    <div class="group-head"><span class="gi"><svg class="ico"><use href="#i-key"/></svg></span><div><p class="h3">Coach</p><p class="tiny">API key, model, and notes</p></div></div>
     <div class="card pad">
       <p class="small muted mb-12">Your key is stored only on this device and sent only to Anthropic.</p>
       <input id="claude-key-field" type="password" class="input mono" style="font-size:.9rem" placeholder="sk-ant-..." autocomplete="off">
       <div class="between mt-12"><span id="settings-saved-msg" class="hidden"></span><button class="btn btn-line btn-sm" style="margin-left:auto" data-act="saveKey"><svg class="ico ico-sm"><use href="#i-check"/></svg>Save key</button></div>
     </div>
     <div class="list mt-12">
-      <div class="list-row"><div><p class="lr-t">Coach model</p><p class="lr-s">Opus thinks harder. Sonnet costs less.</p></div><div class="select-wrap"><select id="coach-model"><option value="claude-opus-5-5">Opus 5.5 (smartest)</option><option value="claude-sonnet-5">Sonnet 5 (cheaper)</option></select></div></div>
+      <div class="list-row"><div><p class="lr-t">Coach model</p><p class="lr-s">Opus is smarter. Sonnet is cheaper.</p></div><div class="select-wrap"><select id="coach-model"><option value="claude-opus-5-5">Opus 5.5 (smartest)</option><option value="claude-sonnet-5">Sonnet 5 (cheaper)</option></select></div></div>
     </div>
     <div class="card pad mt-12">
       <p class="lr-t" style="font-weight:700">Coach Notes</p>
@@ -1134,13 +1118,12 @@ body.typing .dock{transform:translate(-50%,170%)}
   </div>
 
   <div class="group">
-    <div class="group-head"><span class="gi" style="color:var(--red);background:rgba(255,93,82,.1);border-color:rgba(255,93,82,.3)"><svg class="ico"><use href="#i-warn"/></svg></span><div><p class="h3">Danger zone</p><p class="tiny">Handle with chalk</p></div></div>
+    <div class="group-head"><span class="gi" style="color:var(--red);background:rgba(255,93,82,.1);border-color:rgba(255,93,82,.3)"><svg class="ico"><use href="#i-warn"/></svg></span><div><p class="h3">Reset</p><p class="tiny">Re-run the setup questions</p></div></div>
     <div class="list">
       <button class="list-row" data-act="resetOnboarding"><div><p class="lr-t red">Reset &amp; re-run setup</p><p class="lr-s">Workout history stays put</p></div><svg class="ico red"><use href="#i-refresh"/></svg></button>
     </div>
   </div>
 
-  <p class="foot-note"><b>BIG SUNNY'S</b>Powerlifting App · built for lifters, by a lifter</p>
 </section>
 
 <section id="view-settings-program" class="view hidden">
@@ -1174,7 +1157,7 @@ body.typing .dock{transform:translate(-50%,170%)}
     <button class="icon-btn" data-act="back" data-to="view-settings" aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
     <div class="tb-titles"><p class="eyebrow">Settings</p><p class="h2">Exercise library</p></div>
   </div>
-  <p class="sub mb-16">Add, remove, and reorganize. Your logged history is never touched.</p>
+  <p class="sub mb-16">Changes here never affect your logged history.</p>
   <div class="card pad mb-16">
     <p class="label mb-12">New muscle group</p>
     <div class="lib-add" style="margin:0"><input id="new-muscle-input" class="input" placeholder="e.g. Glutes"><button class="btn btn-heat btn-sm" data-act="addMuscleGroup"><svg class="ico ico-sm"><use href="#i-plus"/></svg>Add</button></div>
@@ -1189,14 +1172,14 @@ body.typing .dock{transform:translate(-50%,170%)}
   <button data-act="nav" data-to="view-landing" data-dock="home"><svg class="ico"><use href="#i-home"/></svg><span>Home</span></button>
   <button data-act="nav" data-to="view-search" data-dock="archive"><svg class="ico"><use href="#i-history"/></svg><span>Archive</span></button>
   <button class="dock-train" data-act="openWorkoutInit" data-dock="train" id="dock-train"><span class="train-btn"><svg class="ico"><use href="#i-bar"/></svg></span><span class="lbl">Train</span></button>
-  <button data-act="nav" data-to="view-analytics" data-dock="lab"><svg class="ico"><use href="#i-flask"/></svg><span>Lab</span></button>
-  <button data-act="nav" data-to="view-settings" data-dock="settings"><svg class="ico"><use href="#i-sliders"/></svg><span>Settings</span></button>
+  <button data-act="nav" data-to="view-analytics" data-dock="lab"><svg class="ico"><use href="#i-bar-chart"/></svg><span>Lab</span></button>
+  <button data-act="nav" data-to="view-coach" data-dock="coach"><svg class="ico"><use href="#i-chat"/></svg><span>Coach</span></button>
 </nav>
 
 <!-- REST TIMER -->
 <div id="rest-timer-widget" class="rest hidden" data-act="dismissRest" role="timer" aria-label="Rest timer, tap to dismiss">
   <svg viewBox="0 0 80 80"><circle class="rest-track" cx="40" cy="40" r="36"/><circle class="rest-prog" id="rest-prog" cx="40" cy="40" r="36" stroke-dasharray="226.19" stroke-dashoffset="0"/></svg>
-  <div class="rest-inner"><span class="num" id="rest-timer-count">1:30</span><small>Rest · tap</small></div>
+  <div class="rest-inner"><span class="num" id="rest-timer-count">1:30</span><small>Rest</small></div>
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>
@@ -1775,27 +1758,7 @@ function reflow(el) { if (el) void el.offsetWidth; }
 function animOnce(el, cls) { if (!el) return; el.classList.remove(cls); reflow(el); el.classList.add(cls); setTimeout(function () { el.classList.remove(cls); }, 700); }
 
 // ---------- copy ----------
-var COPY = {
-    quips: [
-        "The bar doesn't lift itself. We checked.",
-        "Gravity is undefeated. Go make it sweat.",
-        "Chalk is cheaper than therapy. Barely.",
-        "Today's forecast: heavy, with a chance of PRs.",
-        "Your future self called. He wants that set logged.",
-        "Plates don't care about your feelings. Log them anyway.",
-        "Warm-ups are optional the way seatbelts are optional.",
-        "Nobody ever regretted the last rep. The fourth donut, maybe.",
-        "Iron is patient. It will wait forever. Don't make it.",
-        "Brace like the tax man is watching.",
-        "Somewhere a leg press is lonely. Don't be the leg press.",
-        "Progressive overload: the only investment that always compounds."
-    ],
-    logged: ["Logged. Iron: 0, you: 1.", "In the books.", "Filed under: strong.", "Receipt printed.", "Noted. Next set.", "Gravity has been informed.", "Set logged. The bar remembers.", "That one counts. Literally."],
-    prQuips: ["Previous best just got evicted.", "Screenshot this. Send it to someone who doesn't care.", "Tell somebody. Tell everybody.", "The old number called. It wants to be remembered fondly.", "New ceiling installed. Mind your head."],
-    paused: ["Paused. The bar will wait. Impatiently.", "Session saved. Go hydrate.", "On hold. Your sets are safe."],
-    finished: ["Go eat something with protein in it.", "Recovery starts now. So does the soreness.", "That's a wrap. The couch has been notified.", "Solid work. Sleep like it's your job."],
-    empty: ["Nothing by that name. Either a typo or a lift you've been avoiding.", "No match. The archive has trust issues with that spelling."]
-};
+var COPY = {};  // (humor lines removed)
 
 // ---------- settings ----------
 var _settingsCache = null;
@@ -2168,7 +2131,7 @@ function appEditEntry(weight, reps, sets, notes, onSave, opts) {
         var r = parseInt(byId('em-reps').value, 10);
         var s = parseInt(byId('em-sets').value, 10);
         var n = byId('em-notes').value;
-        if (!w || !r || !s) { Sound.play('error'); animOnce(sh.el.querySelector('.num-grid'), 'shake'); toast('Sets, reps and weight. All three. Math is like that.', 'bad'); return; }
+        if (!w || !r || !s) { Sound.play('error'); animOnce(sh.el.querySelector('.num-grid'), 'shake'); toast('Enter sets, reps, and weight.', 'bad'); return; }
         sh.close(true); Sound.play('success');
         onSave(w, r, s, n);
     };
@@ -2291,7 +2254,7 @@ function injectLifters(root) {
     $$('[data-lifter]', root).forEach(function (el) { if (!el.firstChild) el.innerHTML = lifterSVG(el.getAttribute('data-lifter')); });
 }
 function emptyState(kind, title, body) {
-    return '<div class="empty">' + lifterSVG(kind || 'bench') + '<p class="h3">' + esc(title) + '</p>' + (body ? '<p class="small">' + esc(body) + '</p>' : '') + '</div>';
+    return '<div class="empty"><p class="h3">' + esc(title) + '</p>' + (body ? '<p class="small">' + esc(body) + '</p>' : '') + '</div>';
 }
 
 // =====================================================================
@@ -2652,7 +2615,8 @@ window.Hero = Hero;
 var VIEW_DOCK = {
     'view-landing': 'home', 'view-search': 'archive', 'view-search-lift': 'archive', 'view-search-day': 'archive',
     'view-session-detail': 'archive', 'view-analytics': 'lab', 'view-settings': 'settings',
-    'view-settings-program': 'settings', 'view-settings-exercises': 'settings'
+    'view-settings-program': 'settings', 'view-settings-exercises': 'settings',
+    'view-coach': 'coach', 'view-coach-chats': 'coach'
 };
 var WORKOUT_VIEWS = { 'view-workout-cats': 1, 'view-exercise-select': 1, 'view-logger': 1 };
 var currentView = null;
@@ -2696,10 +2660,12 @@ function updateDock(id) {
     byId('dock-train').classList.toggle('live', !!(live && live.name));
 }
 function enterView(id) {
-    if (id === 'view-landing') { renderLanding(); Hero.start(); startQuips(); }
+    if (id === 'view-landing') { renderLanding(); Hero.start(); }
     if (id === 'view-search') renderSearchHub();
     if (id === 'view-search-day') renderSearchDayView();
     if (id === 'view-analytics') renderAnalyticsView();
+    if (id === 'view-coach') renderCoach();
+    if (id === 'view-coach-chats') { byId('coach-chat-search').value = ''; renderChatList(); }
     if (id === 'view-settings') populateSettings();
     if (id === 'view-settings-program') populateProgramEditor();
     if (id === 'view-settings-exercises') renderExerciseDbEditor();
@@ -2709,7 +2675,7 @@ function enterView(id) {
     injectLifters(byId(id));
 }
 function leaveView(id) {
-    if (id === 'view-landing') { Hero.stop(); stopQuips(); }
+    if (id === 'view-landing') { Hero.stop(); }
 }
 function initScrollShadows() {
     window.addEventListener('scroll', function () {
@@ -2729,20 +2695,11 @@ function getActiveSession() {
     try { var s = localStorage.getItem(SESSION_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }
 function sessionSetCount(sess) { var n = 0; (sess.entries || []).forEach(function (e) { n += (e.sets || []).length; }); return n; }
-function elapsedText(sess) {
-    if (!sess || !sess.startedAt) return 'Live';
-    var s = Math.max(0, Math.floor((Date.now() - sess.startedAt) / 1000));
-    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    if (h > 0) return h + ':' + pad2(m) + ':' + pad2(sec);
-    return pad2(m) + ':' + pad2(sec);
-}
 function updateSessionBars() {
     var n = sessionSetCount(currentSession);
     $$('#session-title, .js-session-name').forEach(function (el) { el.textContent = currentSession.name || 'Session'; });
     $$('.js-setcount').forEach(function (el) { el.textContent = n + ' set' + (n === 1 ? '' : 's'); });
-    $$('.js-elapsed').forEach(function (el) { el.textContent = elapsedText(currentSession); });
 }
-setInterval(function () { if (WORKOUT_VIEWS[currentView]) $$('.js-elapsed').forEach(function (el) { el.textContent = elapsedText(currentSession); }); }, 1000);
 
 // =====================================================================
 // REST TIMER
@@ -2764,7 +2721,7 @@ function startRestTimer() {
             clearInterval(restTimerInterval);
             widget.classList.add('done');
             Sound.play('bell'); buzz([80, 60, 80]);
-            toast('Rest over. Back under the bar.', 'warm', 'clock');
+            toast('Rest is over.', 'warm', 'clock');
             setTimeout(function () { widget.classList.add('hidden'); }, 900);
         }
     }, 1000);
@@ -2841,14 +2798,14 @@ function onboardNext(step, choice) {
         else {
             showOnboardStep(5);
             byId('onboard-done-title').textContent = "You're all set, " + onboardData.name + '.';
-            byId('onboard-done-sub').textContent = 'Log any exercise, any time. The only homework is lifting.';
+            byId('onboard-done-sub').textContent = 'Log any exercise, any time.';
         }
         Sound.play('nav');
     } else if (step === 4) {
         onboardData.days = collectDays('program-day-builder', 'data-day');
         showOnboardStep(5);
         byId('onboard-done-title').textContent = "You're all set, " + onboardData.name + '.';
-        byId('onboard-done-sub').textContent = 'Your ' + onboardData.dayCount + '-day program is loaded. Time to earn it.';
+        byId('onboard-done-sub').textContent = 'Your ' + onboardData.dayCount + '-day program is set up.';
         Sound.play('success');
     }
 }
@@ -2863,7 +2820,7 @@ function finishOnboarding() {
     initApp();
 }
 function resetOnboarding() {
-    appConfirm({ title: 'Re-run setup?', body: 'Your workout history stays exactly where it is. Only the setup questions start over.', yes: 'Re-run setup', danger: true, icon: 'refresh' }, function () {
+    appConfirm({ title: 'Re-run setup?', body: 'Your workout history is kept. Only the setup questions start over.', yes: 'Re-run setup', danger: true, icon: 'refresh' }, function () {
         localStorage.removeItem(ONBOARD_KEY); location.reload();
     });
 }
@@ -2891,37 +2848,10 @@ function initApp() {
     }
 }
 
-var quipTimer = null;
-function landingQuips() {
-    var s = S(), idx = IDX(), out = [];
-    var last = idx.dates[0];
-    if (last) {
-        var n = daysAgo(last);
-        if (n === 0) out.push('Already trained today. Overachiever.');
-        else if (n >= 5) out.push("It's been " + n + ' days. The barbell has started asking questions.');
-        else if (n >= 3) out.push(n + ' days off. Recovered, or just avoiding leg day?');
-    } else {
-        out.push('Clean slate. The first set is the hardest one to log.');
-    }
-    return out.concat(COPY.quips.slice().sort(function () { return Math.random() - 0.5; }));
-}
-function startQuips() {
-    stopQuips();
-    var list = landingQuips(), i = 0, el = byId('greet-quip');
-    el.textContent = list[0];
-    quipTimer = setInterval(function () {
-        i = (i + 1) % list.length;
-        el.classList.add('swap');
-        setTimeout(function () { el.textContent = list[i]; el.classList.remove('swap'); }, 450);
-    }, 7000);
-}
-function stopQuips() { clearInterval(quipTimer); quipTimer = null; }
-
 function greetingFor(h) {
     if (h >= 4 && h < 11) return 'Good morning';
     if (h >= 11 && h < 17) return 'Good afternoon';
-    if (h >= 17 && h < 22) return 'Good evening';
-    return 'Burning the midnight chalk';
+    return 'Good evening';
 }
 function renderLanding() {
     var s = S(), idx = IDX(), ul = unitLabel();
@@ -2936,33 +2866,20 @@ function renderLanding() {
     byId('total-strip').innerHTML =
         '<div><p class="label">SBD total</p><p class="num mt-4"><span ' + countAttr(total) + '>0</span> <span class="small muted">' + ul + '</span></p></div>' +
         '<div class="center"><p class="label">Wilks</p><p class="num mt-4 heat-text"><span ' + countAttr(wilks) + '>0</span></p></div>' +
-        '<div style="text-align:right"><p class="label">× Bodyweight</p><p class="num mt-4"><span ' + countAttr(bw ? Math.round(total / bw * 100) / 100 : 0) + ' data-dec="2">0</span></p></div>';
+        '<div style="text-align:right"><p class="label">Bodyweight</p><p class="num mt-4"><span ' + countAttr(bw) + '>0</span> <span class="small muted">' + ul + '</span></p></div>';
 
     // live session
     var active = getActiveSession(), banner = byId('active-session-banner');
     if (active && active.name) {
         var n = sessionSetCount(active);
         byId('active-session-name').textContent = active.name;
-        byId('active-session-text').textContent = n + ' set' + (n === 1 ? '' : 's') + ' logged · ' + (active.startedAt ? 'started ' + elapsedText(active) + ' ago' : 'paused');
+        byId('active-session-text').textContent = n + ' set' + (n === 1 ? '' : 's') + ' logged';
         banner.classList.remove('hidden');
-        byId('cta-label').textContent = 'Back to the bar';
+        byId('cta-label').textContent = 'Resume workout';
     } else {
         banner.classList.add('hidden');
-        byId('cta-label').textContent = 'Step up to the bar';
+        byId('cta-label').textContent = 'Start workout';
     }
-
-    // stats
-    var month = todayStr().slice(0, 7);
-    var thisMonth = idx.dates.filter(function (d) { return d.slice(0, 7) === month; }).length;
-    var since = idx.dates[0] ? daysAgo(idx.dates[0]) : 0;
-    var d7 = parseDate(todayStr()); d7.setDate(d7.getDate() - 7);
-    var tonnage = 0;
-    idx.dates.forEach(function (d) { if (parseDate(d) > d7) idx.byDate[d].forEach(function (w) { tonnage += volumeOf(w); }); });
-    byId('landing-stats').innerHTML =
-        '<div class="stat"><p class="num" ' + countAttr(thisMonth) + '>0</p><p class="label">Sessions this month</p></div>' +
-        '<div class="stat"><p class="num" ' + countAttr(since) + '>0</p><p class="label">Days since last lift</p></div>' +
-        '<div class="stat"><p class="num" ' + countAttr(idx.dates.length) + '>0</p><p class="label">Lifetime sessions</p></div>';
-    stagger(byId('landing-stats'));
 
     // last session
     var lastDate = idx.dates[0], lb = byId('last-session-banner');
@@ -3007,13 +2924,13 @@ function buildSearchDayButtons() { if (currentView === 'view-search') renderSear
 function buildSessionDayButtons() {
     var prog = getProgram(), container = byId('session-day-buttons'); if (!container) return;
     if (prog.mode === 'free') {
-        byId('init-sub').textContent = 'Free training. Pick a lift, any lift.';
+        byId('init-sub').textContent = 'Free training mode.';
         container.innerHTML = '<button class="day-card next" style="--dc:#ff7a1a" data-act="startSession" data-name="Free Workout">' +
             '<span class="day-num">' + ico('bolt', 'ico-lg') + '</span><div class="grow"><p class="day-name">Start workout</p><p class="small muted mt-4">Choose any exercise from any group</p></div>' + ico('chev') + '</button>';
         stagger(container); return;
     }
     var nx = nextDayIndex(), idx = IDX();
-    byId('init-sub').textContent = nx >= 0 && prog.days[nx] ? 'Up next in the rotation: ' + prog.days[nx].name + '.' : "Pick today's session.";
+    byId('init-sub').textContent = nx >= 0 && prog.days[nx] ? 'Next in your rotation: ' + prog.days[nx].name + '.' : "Choose today's session.";
     container.innerHTML = prog.days.map(function (d, i) {
         var lastD = null;
         for (var k = 0; k < idx.dates.length; k++) { var tag = idx.byDate[idx.dates[k]][0].program || ''; if (tag.indexOf(d.name) !== -1) { lastD = idx.dates[k]; break; } }
@@ -3062,7 +2979,6 @@ function startSession(name) {
     buildCategoryView(name);
     Sound.play('start'); buzz(20);
     navTo('view-workout-cats');
-    toast('Session started. Chalk up.', 'warm', 'flame');
 }
 function openWorkoutInit() {
     var active = getActiveSession();
@@ -3082,11 +2998,11 @@ function pauseWorkout() {
     saveActiveSession();
     Sound.play('pause');
     navTo('view-landing', { back: true });
-    toast(pick(COPY.paused), 'warm', 'pause');
+    toast('Workout paused.', 'warm', 'pause');
 }
 function cancelWorkout() {
     var n = sessionSetCount(currentSession);
-    appConfirm({ title: 'Scrap this session?', body: n ? 'All ' + n + ' set' + (n === 1 ? '' : 's') + ' you logged today go with it. No take-backs.' : 'Nothing logged yet, so nothing lost.', yes: 'Scrap it', no: 'Keep lifting', danger: true, icon: 'trash' }, function () {
+    appConfirm({ title: 'Cancel this workout?', body: n ? 'The ' + n + ' set' + (n === 1 ? '' : 's') + ' you logged today will be deleted.' : 'Nothing has been logged yet.', yes: 'Cancel workout', no: 'Keep going', danger: true, icon: 'trash' }, function () {
         if (currentSession.entries && currentSession.entries.length) {
             var ids = {}; currentSession.entries.forEach(function (e) { if (e._id) ids[e._id] = true; });
             saveWorkouts(loadWorkouts().filter(function (e) { return !e._id || !ids[e._id]; }));
@@ -3096,16 +3012,16 @@ function cancelWorkout() {
         dismissRestTimer();
         Sound.play('delete');
         navTo('view-landing', { back: true });
-        toast("Session scrapped. We'll pretend it never happened.", 'bad', 'trash');
+        toast('Workout cancelled.', 'bad', 'trash');
     });
 }
 function finishWorkout() {
     if (!currentSession.entries || currentSession.entries.length === 0) {
-        appConfirm({ title: 'Nothing logged yet', body: 'Finishing now just cancels the session. Your call.', yes: 'Cancel session', no: 'Keep lifting', icon: 'flag' }, function () {
+        appConfirm({ title: 'Nothing logged yet', body: 'Finishing now will cancel this workout.', yes: 'Cancel workout', no: 'Keep going', icon: 'flag' }, function () {
             clearActiveSession();
             currentSession = { name: '', date: '', entries: [] };
             navTo('view-landing', { back: true });
-            toast('Session cancelled.', 'bad');
+            toast('Workout cancelled.', 'bad');
         });
         return;
     }
@@ -3120,8 +3036,7 @@ function finishWorkout() {
 function summarize(sess) {
     var sets = 0, vol = 0, ex = {};
     sess.entries.forEach(function (e) { sets += e.sets.length; vol += volumeOf(e); ex[e.exercise] = 1; });
-    var dur = sess.startedAt ? Math.round((Date.now() - sess.startedAt) / 60000) : 0;
-    return { name: sess.name, sets: sets, volume: vol, exercises: Object.keys(ex).length, minutes: dur, prs: sess.prs || [] };
+    return { name: sess.name, sets: sets, volume: vol, exercises: Object.keys(ex).length, prs: sess.prs || [] };
 }
 
 function selectCategory(cat) {
@@ -3131,7 +3046,7 @@ function selectCategory(cat) {
 function renderExerciseList(cat) {
     var db = getExerciseDb(), list = (db[cat] || []).slice().sort(), idx = IDX(), ul = unitLabel();
     byId('cat-header').textContent = cat;
-    byId('cat-eyebrow').textContent = list.length + ' lift' + (list.length === 1 ? '' : 's') + ' in this group';
+    byId('cat-eyebrow').textContent = list.length + ' exercise' + (list.length === 1 ? '' : 's');
     byId('cat-plate').innerHTML = plateBadge(cat, 'lg');
     var box = byId('exercise-list');
     box.innerHTML = list.map(function (ex) {
@@ -3139,7 +3054,7 @@ function renderExerciseList(cat) {
         var done = (currentSession.entries || []).some(function (e) { return e.exercise === ex; });
         return '<button class="row ex-row" data-act="startExercise" data-ex="' + esc(ex) + '" data-cat="' + esc(cat) + '"><span class="hold-fill"></span>' +
             '<span class="grow"><span class="row-title" style="display:block">' + esc(ex) + '</span><span class="row-sub" style="display:block">' +
-            (l ? 'Last ' + relDay(l.date).toLowerCase() : 'Never logged. Fresh territory.') + '</span></span>' +
+            (l ? 'Last ' + relDay(l.date).toLowerCase() : 'Not logged yet') + '</span></span>' +
             '<span class="row-end">' + (done ? '<span class="badge">Done today</span>' : '') + (p && p.w ? '<span class="num" style="font-size:1.05rem;color:var(--gold)">' + fmtW(p.w) + '<span class="tiny muted"> ' + ul + '</span></span>' : '') + ico('chev', 'ico-sm') + '</span></button>';
     }).join('') +
         '<button class="row dashed" data-act="promptCustomExercise" data-cat="' + esc(cat) + '">' + ico('plus', 'ico-sm') + 'Custom exercise</button>';
@@ -3256,7 +3171,7 @@ function updateLiveCalc() {
         text += '<span>Per side: ' + (plates2.length ? plates2.map(function (p) { return fmtW(p.w); }).join(' · ') : 'empty bar') + '</span>';
     }
     if (e1) text += '<b>≈ ' + fmtInt(e1) + ' ' + ul + ' e1RM</b>';
-    if (pr && w > pr) text += '<span class="ember">' + ico('flame', 'ico-sm') + ' PR territory</span>';
+    if (pr && w > pr) text += '<span class="ember">' + ico('flame', 'ico-sm') + ' Above your PR</span>';
     byId('calc-text').innerHTML = text || '<span>&nbsp;</span>';
 }
 
@@ -3268,7 +3183,7 @@ function saveSet() {
     if (!sets || !r || !w) {
         Sound.play('error'); buzz([40, 30, 40]);
         animOnce($('#view-logger .num-grid'), 'shake');
-        toast('Sets, reps and weight. All three. Math is like that.', 'bad');
+        toast('Enter sets, reps, and weight.', 'bad');
         return;
     }
     var prevPR = getPR(activeExercise);
@@ -3297,7 +3212,7 @@ function saveSet() {
         celebratePR(activeExercise, w, prevPR);
     } else {
         Sound.play('log'); buzz(18);
-        toast(prevPR === 0 ? 'First entry for ' + activeExercise + '. Baseline set.' : pick(COPY.logged), 'good', prevPR === 0 ? 'flag' : 'check');
+        toast(prevPR === 0 ? 'First entry for ' + activeExercise + '.' : 'Set logged.', 'good', prevPR === 0 ? 'flag' : 'check');
         setTimeout(function () { var i = byId('log-sets'); if (i && currentView === 'view-logger') i.focus(); }, 120);
     }
 }
@@ -3352,7 +3267,7 @@ function renderSessionLogList(newId) {
     var html = entries.length ? head + list : '';
     var a = byId('session-sets-list'); if (a) a.innerHTML = html || (currentView === 'view-logger' ? '' : '');
     var b = byId('cats-session-log');
-    if (b) b.innerHTML = entries.length ? html : '<div class="empty" style="padding-top:34px">' + lifterSVG('squat') + '<p class="h3">Nothing logged yet</p><p class="small">Pick a group above. The first set is the hardest one to write down.</p></div>';
+    if (b) b.innerHTML = entries.length ? html : '';
     updateSessionBars();
 }
 function editLogEntry(id) {
@@ -3367,7 +3282,7 @@ function editLogEntry(id) {
         currentSession.entries.forEach(function (e, k) { if (e._id === id) { currentSession.entries[k].sets = setObjs; currentSession.entries[k].notes = n; } });
         saveActiveSession();
         renderSessionLogList();
-        toast('Updated. History has been revised.', 'good', 'edit');
+        toast('Entry updated.', 'good', 'edit');
     }, { eyebrow: 'Edit entry', title: entry.exercise });
 }
 function deleteLogEntry(id) {
@@ -3395,12 +3310,12 @@ function editHistoryEntry(id, date, exercise) {
         var fresh = findHistoryEntry(id, date, exercise); if (!fresh) return;
         fresh.all[fresh.idx].sets = setObjs; fresh.all[fresh.idx].notes = n;
         saveWorkouts(fresh.all);
-        toast('Updated. History has been revised.', 'good', 'edit');
+        toast('Entry updated.', 'good', 'edit');
         refreshCurrentView();
     }, { eyebrow: formatDate(entry.date), title: entry.exercise });
 }
 function deleteHistoryEntry(id, date, exercise) {
-    appConfirm({ title: 'Delete this entry?', body: "It's gone for good. Unlike DOMS.", yes: 'Delete', danger: true, icon: 'trash' }, function () {
+    appConfirm({ title: 'Delete this entry?', body: "This can't be undone.", yes: 'Delete', danger: true, icon: 'trash' }, function () {
         var found = findHistoryEntry(id, date, exercise);
         if (!found) { toast('Entry not found.', 'bad'); return; }
         found.all.splice(found.idx, 1);
@@ -3439,7 +3354,7 @@ function renderSessionDetail() {
         '<div><p class="num" style="font-size:2rem" ' + countAttr(vol) + '>0</p><p class="label mt-4">' + ul + ' moved</p></div></div>' +
         (prs ? '<p class="small mt-12 ember">' + ico('trophy', 'ico-sm') + ' ' + prs + ' all-time PR' + (prs > 1 ? 's' : '') + ' still standing from this day</p>' : '') + '</div>' +
         '<button class="row dashed mb-12" data-act="addExerciseToSession" data-date="' + esc(date) + '">' + ico('plus', 'ico-sm') + 'Add exercise to this day</button>' +
-        '<div class="stack" id="detail-list">' + (entries.length ? entries.map(function (e) { return entryHTML(e, 'hist'); }).join('') : emptyState('bench', 'Empty day', 'Everything from this date was deleted.')) + '</div>';
+        '<div class="stack" id="detail-list">' + (entries.length ? entries.map(function (e) { return entryHTML(e, 'hist'); }).join('') : emptyState('bench', 'No entries', 'Everything from this date was deleted.')) + '</div>';
     stagger(byId('detail-list'));
     countUps(area);
 }
@@ -3499,7 +3414,7 @@ function renderSearchHub() {
         var es = idx.byDate[d], vol = 0; es.forEach(function (e) { vol += volumeOf(e); });
         return '<button class="row" data-act="showSessionDetail" data-date="' + d + '" data-back="view-search"><span class="grow"><span class="row-title" style="display:block">' + formatDate(d) + '</span>' +
             '<span class="row-sub" style="display:block">' + esc(shortProgram(es[0].program)) + ' · ' + es.length + ' lift' + (es.length === 1 ? '' : 's') + ' · ' + fmtInt(vol) + ' ' + ul + '</span></span><span class="row-end">' + ico('chev', 'ico-sm') + '</span></button>';
-    }).join('') || emptyState('bench', 'No sessions yet', 'Your history starts with the next set.');
+    }).join('') || emptyState('bench', 'No sessions yet', '');
     stagger(byId('hub-recent'));
 }
 function renderSearchDropdown(q) {
@@ -3512,7 +3427,7 @@ function renderSearchDropdown(q) {
         return;
     }
     var matches = getMatchingExercises(q);
-    if (!matches.length) { dd.classList.add('hidden'); res.innerHTML = emptyState('squat', 'No match', pick(COPY.empty)); return; }
+    if (!matches.length) { dd.classList.add('hidden'); res.innerHTML = emptyState('squat', 'No match', 'No exercises match that search.'); return; }
     if (matches.length === 1) { dd.classList.add('hidden'); renderExerciseResults(matches[0]); return; }
     res.innerHTML = '';
     dd.classList.remove('hidden');
@@ -3596,7 +3511,7 @@ function selectSearchDay(dayIdx, silent) {
     var dates = Object.keys(map).filter(function (d) { return map[d] === dayIdx; }).sort().reverse();
     var area = byId('day-dates-area');
     var head = '<div class="section-title" style="margin-top:6px"><span class="label">' + esc(day ? day.name : 'Day') + ' · ' + dates.length + ' sessions</span></div>';
-    if (!dates.length) { area.innerHTML = head + emptyState('bench', 'No sessions yet', 'Nothing logged for this day. Yet.'); return; }
+    if (!dates.length) { area.innerHTML = head + emptyState('bench', 'No sessions yet', 'Nothing logged for this day.'); return; }
     area.innerHTML = head + dates.map(function (d) {
         var es = idx.byDate[d], names = [];
         es.forEach(function (e) { if (names.indexOf(e.exercise) === -1) names.push(e.exercise); });
@@ -3664,8 +3579,8 @@ function toggleHaptics() {
 function toggleSoundQuick() {
     var s = S(); s.soundEnabled = s.soundEnabled === false; saveSettings(s);
     syncSoundIcon();
-    if (s.soundEnabled) { Sound.play('clank'); toast('Sound on. Let it clank.', 'warm', 'sound'); }
-    else toast('Sound off. Silent but deadly.', 'warm', 'mute');
+    if (s.soundEnabled) { Sound.play('clank'); toast('Sound on.', 'warm', 'sound'); }
+    else toast('Sound off.', 'warm', 'mute');
 }
 function settingsSelectUnit(u, silent) {
     byId('settings-unit-lbs').classList.toggle('on', u === 'lbs');
@@ -3702,11 +3617,10 @@ function saveCoachModel() {
 }
 function saveCoachNotes() {
     localStorage.setItem(AI_NOTES_STORE, byId('coach-notes-field').value.trim());
-    // Start a fresh coach chat so the new notes take effect immediately
-    aiChatHistory = []; aiSystemContext = '';
-    var hist = byId('ai-chat-history'); if (hist) hist.innerHTML = '';
+    // The coach re-reads the notes on the next message
+    aiSystemContext = '';
     Sound.play('success');
-    flashSaved('coach-notes-saved-msg', 'Notes saved · fresh chat started');
+    flashSaved('coach-notes-saved-msg', 'Notes saved');
 }
 function saveClaudeKey() {
     var key = byId('claude-key-field').value.trim();
@@ -3764,7 +3678,7 @@ function saveProgramSettings() {
     byId('analytics-day-tab-btn').textContent = 'Days';
     Sound.play('success');
     flashSaved('program-saved-msg', 'Program saved');
-    toast('Program saved. ' + days.length + ' days on the board.', 'good', 'cal');
+    toast('Program saved.', 'good', 'cal');
 }
 function toggleChip(btn) {
     btn.classList.toggle('on');
@@ -3802,7 +3716,7 @@ function addMuscleGroup() {
     byId('new-muscle-input').value = '';
     _openGroups[name] = true;
     renderExerciseDbEditor();
-    Sound.play('success'); toast(name + ' added. Go fill it up.', 'good', 'plus');
+    Sound.play('success'); toast(name + ' added.', 'good', 'plus');
 }
 function deleteMuscleGroup(m) {
     appConfirm({ title: 'Remove ' + m + '?', body: 'The group and its exercise list go. Your logged sets stay exactly as they are.', yes: 'Remove group', danger: true, icon: 'trash' }, function () {
@@ -3846,7 +3760,7 @@ function exportData() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
     Sound.play('success');
-    toast('Backup downloaded. ' + data.length + ' entries, zero excuses.', 'good', 'download');
+    toast('Backup downloaded (' + data.length + ' entries).', 'good', 'download');
 }
 function importData(event) {
     var file = event.target.files[0]; if (!file) return;
@@ -3860,7 +3774,7 @@ function importData(event) {
             Sound.play('success');
             toast('Imported ' + data.length + ' entries.', 'good', 'upload');
             renderLandingBanner();
-        } catch (err) { Sound.play('error'); toast("Import failed. That file isn't a Big Sunny backup.", 'bad'); }
+        } catch (err) { Sound.play('error'); toast("Import failed. That file isn't a Big Sunny's backup.", 'bad'); }
     };
     reader.readAsText(file); event.target.value = '';
 }
@@ -3935,7 +3849,8 @@ function renderAnalyticsView() {
 }
 function switchAnalyticsTab(tab, silent) {
     labTab = tab;
-    var tabs = ['exercise', 'day', 'muscle', 'ai'];
+    var tabs = ['exercise', 'day', 'muscle'];
+    if (tabs.indexOf(tab) === -1) tab = labTab = 'exercise';
     $$('.analytics-panel').forEach(function (p) { p.classList.add('hidden'); });
     $$('#lab-seg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === tab); });
     byId('seg-ind').style.transform = 'translateX(' + (tabs.indexOf(tab) * 100) + '%)';
@@ -3944,7 +3859,6 @@ function switchAnalyticsTab(tab, silent) {
     if (tab === 'exercise') renderLabExercise();
     if (tab === 'day') renderDayTabInit();
     if (tab === 'muscle') renderMuscleTab();
-    if (tab === 'ai') renderCoach();
     if (!silent) Sound.play('toggle');
 }
 
@@ -3958,7 +3872,7 @@ function renderLabExercise() {
     if (_labPick) renderExerciseAnalytics(_labPick, true);
     else if (q) renderExerciseAnalytics(q);
     else if (top[0]) { _labPick = top.indexOf('Squat') !== -1 ? 'Squat' : top[0]; renderLabExercise(); }
-    else byId('analytics-exercise-content').innerHTML = emptyState('squat', 'No data yet', 'Log a few sessions and this turns into a lab report.');
+    else byId('analytics-exercise-content').innerHTML = emptyState('squat', 'No data yet', 'Log a few sessions to see charts here.');
 }
 function renderExerciseAnalytics(query, exact) {
     var box = byId('analytics-exercise-content');
@@ -3994,14 +3908,14 @@ function renderExerciseAnalytics(query, exact) {
     var bw = parseFloat(S().bw) || 175, ul = unitLabel();
     var first = e1rms[0], lastE = e1rms[e1rms.length - 1], delta = lastE - first;
     box.innerHTML =
-        '<div class="between mb-12"><div><p class="eyebrow">' + esc(groupOf(name) || 'Lift') + '</p><h3 class="title mt-8" style="font-size:1.9rem">' + esc(name) + '</h3></div>' + plateBadge(groupOf(name) || name, 'lg') + '</div>' +
+        '<div class="between mb-12"><div>' + (groupOf(name) && groupOf(name) !== name ? '<p class="eyebrow">' + esc(groupOf(name)) + '</p>' : '') + '<h3 class="title mt-8" style="font-size:1.9rem">' + esc(name) + '</h3></div>' + plateBadge(groupOf(name) || name, 'lg') + '</div>' +
         '<div class="metrics">' +
         '<div class="metric"><p class="num heat-text"><span ' + countAttr(allPR) + '>0</span></p><p class="label">All-time PR · ' + ul + '</p></div>' +
         '<div class="metric"><p class="num"><span ' + countAttr(allE) + '>0</span></p><p class="label">Best e1RM · ' + ul + '</p></div>' +
         '<div class="metric"><p class="num"><span ' + countAttr(dates.length) + '>0</span></p><p class="label">Sessions</p></div>' +
         '<div class="metric"><p class="num"><span ' + countAttr(Math.round(allPR / bw * 100) / 100) + ' data-dec="2">0</span><span class="u">×BW</span></p><p class="label">Bodyweight ratio</p></div>' +
         '</div>' +
-        (dates.length > 1 ? '<p class="small mt-12 ' + (delta >= 0 ? 'green' : 'red') + '">' + ico(delta >= 0 ? 'flame' : 'warn', 'ico-sm') + ' e1RM ' + (delta >= 0 ? 'up ' : 'down ') + fmtInt(Math.abs(delta)) + ' ' + ul + ' since ' + formatDate(dates[0]) + (delta >= 0 ? '. Keep feeding it.' : '. Every graph has a valley.') + '</p>' : '') +
+        (dates.length > 1 ? '<p class="small mt-12 ' + (delta >= 0 ? 'green' : 'red') + '">' + ico(delta >= 0 ? 'flame' : 'warn', 'ico-sm') + ' e1RM ' + (delta >= 0 ? 'up ' : 'down ') + fmtInt(Math.abs(delta)) + ' ' + ul + ' since ' + formatDate(dates[0]) + '.' + '</p>' : '') +
         '<div class="card chart-card mt-12"><p class="label">Estimated 1RM & top set</p><div class="chart-box" style="height:220px"><canvas id="chart-ex-e1rm"></canvas></div></div>' +
         '<div class="card chart-card mt-12"><p class="label">Session volume · ' + ul + '</p><div class="chart-box" style="height:170px"><canvas id="chart-ex-volume"></canvas></div></div>';
     countUps(box);
@@ -4151,21 +4065,117 @@ function renderSBDChart(all) {
 // =====================================================================
 // THE COACH (streaming Claude chat, full training context)
 // =====================================================================
-var aiChatHistory = [];
-var aiSystemContext = '';
+// Saved conversations live on this phone, like chats in the Claude app.
+var COACH_CHATS_KEY = 'bigsunny_coach_chats';
+var COACH_CURRENT_KEY = 'bigsunny_coach_current';
+var aiChatHistory = [];          // messages of the open chat (kept for older code paths)
+var aiSystemContext = '';        // training-log prompt, rebuilt per chat so it stays current
+var aiSystemContextChat = null;
 var coachBusy = false;
+var coachChatId = null;          // null = a new, unsaved chat
 var AI_MODEL_STORE = 'bigsunny_coach_model';
 var AI_NOTES_STORE = 'bigsunny_coach_notes';
 var AI_DEFAULT_MODEL = 'claude-opus-5-5';
 function coachModel() { return localStorage.getItem(AI_MODEL_STORE) || AI_DEFAULT_MODEL; }
 function coachModelName() { return coachModel() === 'claude-sonnet-5' ? 'Sonnet 5' : 'Opus 5.5'; }
 var SUGGESTIONS = [
-    ['bolt', 'What should I hit today, and at what weights?'],
-    ['flame', 'Why is my bench stalling? Be honest.'],
-    ['cal', 'Build me a 6-week peak for a new squat PR.'],
-    ['search', 'Where am I weakest right now?'],
-    ['history', "How has my deadlift trended since March 2025?"]
+    'What should I do today, and at what weights?',
+    'Why has my bench stalled?',
+    'Write me a 6-week plan to peak my squat.',
+    'Where am I weakest right now?',
+    'How has my deadlift progressed this year?'
 ];
+
+// ---------- chat storage ----------
+function loadChats() {
+    try { var c = JSON.parse(localStorage.getItem(COACH_CHATS_KEY) || '[]'); return Array.isArray(c) ? c : []; } catch (e) { return []; }
+}
+function saveChats(chats) {
+    try { localStorage.setItem(COACH_CHATS_KEY, JSON.stringify(chats)); return true; }
+    catch (e) { toast('Could not save the chat. Phone storage is full. Delete some old chats.', 'bad'); return false; }
+}
+function getChat(id) { var c = loadChats(); for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i]; return null; }
+function putChat(chat) {
+    var chats = loadChats(), found = false;
+    for (var i = 0; i < chats.length; i++) if (chats[i].id === chat.id) { chats[i] = chat; found = true; }
+    if (!found) chats.push(chat);
+    saveChats(chats);
+}
+function chatTitleFrom(text) {
+    var t = text.replace(/\s+/g, ' ').trim();
+    return t.length > 48 ? t.slice(0, 46).replace(/\s+\S*$/, '') + '...' : t;
+}
+function setCurrentChat(id) {
+    coachChatId = id;
+    try { if (id) localStorage.setItem(COACH_CURRENT_KEY, id); else localStorage.removeItem(COACH_CURRENT_KEY); } catch (e) {}
+}
+function openChat(id) {
+    var chat = id ? getChat(id) : null;
+    setCurrentChat(chat ? chat.id : null);
+    aiChatHistory = chat ? chat.messages.slice() : [];
+    var box = byId('ai-chat-history'); box.innerHTML = '';
+    aiChatHistory.forEach(function (m) { appendChatBubble(m.role, m.content, true); });
+    renderCoach();
+    if (currentView === 'view-coach') window.scrollTo(0, chat ? document.body.scrollHeight : 0);
+}
+function coachNew() {
+    openChat(null);
+    if (currentView !== 'view-coach') navTo('view-coach');
+    setTimeout(function () { byId('ai-chat-input').focus(); }, 250);
+}
+function renameChat(id) {
+    var chat = getChat(id); if (!chat) return;
+    appPrompt({ title: 'Rename chat', placeholder: 'Chat name', yes: 'Save' }, chat.title, function (name) {
+        name = (name || '').trim(); if (!name) return;
+        chat.title = name; putChat(chat);
+        renderChatList();
+        if (coachChatId === id) byId('coach-title').textContent = name;
+    });
+}
+function deleteChat(id) {
+    var chat = getChat(id); if (!chat) return;
+    appConfirm({ title: 'Delete this chat?', body: '"' + chat.title + '" will be deleted from this phone.', yes: 'Delete', danger: true, icon: 'trash' }, function () {
+        saveChats(loadChats().filter(function (c) { return c.id !== id; }));
+        if (coachChatId === id) openChat(null);
+        Sound.play('delete');
+        renderChatList();
+    });
+}
+function chatGroupLabel(ts) {
+    var d = new Date(ts), today = parseDate(todayStr());
+    var day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var diff = Math.round((today - day) / 86400000);
+    if (diff <= 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff < 7) return 'Previous 7 days';
+    if (diff < 30) return 'Previous 30 days';
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+function renderChatList() {
+    var q = (byId('coach-chat-search').value || '').trim().toLowerCase();
+    var chats = loadChats().sort(function (a, b) { return b.updated - a.updated; });
+    if (q) chats = chats.filter(function (c) {
+        return c.title.toLowerCase().indexOf(q) !== -1 || c.messages.some(function (m) { return m.content.toLowerCase().indexOf(q) !== -1; });
+    });
+    var box = byId('coach-chat-list');
+    if (!chats.length) {
+        box.innerHTML = '<div class="empty"><p class="h3">' + (q ? 'No chats match' : 'No saved chats yet') + '</p>' + (q ? '' : '<p class="small">Conversations with the coach are saved here automatically.</p>') + '</div>';
+        return;
+    }
+    var html = '', last = '';
+    chats.forEach(function (c) {
+        var g = chatGroupLabel(c.updated);
+        if (g !== last) { html += '<p class="label chat-group">' + esc(g) + '</p>'; last = g; }
+        var n = c.messages.filter(function (m) { return m.role === 'user'; }).length;
+        html += '<div class="chat-row' + (c.id === coachChatId ? ' on' : '') + '">' +
+            '<button class="chat-open" data-act="openChat" data-id="' + esc(c.id) + '"><span class="row-title" style="display:block">' + esc(c.title) + '</span>' +
+            '<span class="row-sub" style="display:block">' + n + ' message' + (n === 1 ? '' : 's') + ' · ' + formatDateShort(new Date(c.updated).toISOString().slice(0, 10)) + '</span></button>' +
+            '<button class="icon-btn sm ghost" data-act="renameChat" data-id="' + esc(c.id) + '" aria-label="Rename">' + ico('edit', 'ico-sm') + '</button>' +
+            '<button class="icon-btn sm ghost" data-act="deleteChat" data-id="' + esc(c.id) + '" aria-label="Delete">' + ico('trash', 'ico-sm') + '</button></div>';
+    });
+    box.innerHTML = html;
+}
+
 // Compress a session's sets: [{w:235,r:5}x3] -> "3x5@235"
 function compactSets(sets) {
     var out = [], i = 0;
@@ -4229,14 +4239,14 @@ function buildCoachSystemPrompt() {
         '--- FULL TRAINING LOG (oldest first) ---\n' + fullLog + '\n';
 }
 function renderCoach() {
-    var hasKey = !!localStorage.getItem(AI_KEY_STORE), idx = IDX();
+    var hasKey = !!localStorage.getItem(AI_KEY_STORE);
     byId('ai-no-key').classList.toggle('hidden', hasKey);
-    var hasNotes = !!localStorage.getItem(AI_NOTES_STORE);
-    byId('coach-sub').textContent = coachModelName() + ' · ' + (idx.dates.length ? 'has read all ' + idx.dates.length + ' sessions since ' + formatDate(idx.dates[idx.dates.length - 1]) : 'ready when your log is') + (hasNotes ? ' and your notes.' : '.');
+    byId('coach-model-label').textContent = 'Coach · ' + coachModelName();
+    var chat = coachChatId ? getChat(coachChatId) : null;
+    byId('coach-title').textContent = chat ? chat.title : 'New chat';
     var sg = byId('coach-suggest');
     if (!aiChatHistory.length) {
-        sg.innerHTML = '<p class="label mb-8">Try asking</p>' + SUGGESTIONS.map(function (x) { return '<button data-act="coachSuggest" data-q="' + esc(x[1]) + '">' + ico(x[0], 'ico-sm') + esc(x[1]) + '</button>'; }).join('');
-        stagger(sg);
+        sg.innerHTML = '<p class="label mb-8">Suggestions</p>' + SUGGESTIONS.map(function (q) { return '<button data-act="coachSuggest" data-q="' + esc(q) + '">' + esc(q) + '</button>'; }).join('');
         sg.classList.remove('hidden');
     } else sg.classList.add('hidden');
 }
@@ -4269,13 +4279,13 @@ function renderMarkdown(src) {
     flushT(); flushP(); flushL();
     return out.join('');
 }
-function appendChatBubble(role, text) {
+function appendChatBubble(role, text, quiet) {
     var wrap = byId('ai-chat-history');
     var div = document.createElement('div');
     div.className = 'msg ' + (role === 'user' ? 'user' : 'ai');
     if (role === 'user') div.textContent = text; else div.innerHTML = renderMarkdown(text);
     wrap.appendChild(div);
-    scrollChat();
+    if (!quiet) scrollChat();
     return div;
 }
 function scrollChat() {
@@ -4329,10 +4339,22 @@ function sendCoachMessage(text) {
     if (!msg) return;
     if (!localStorage.getItem(AI_KEY_STORE)) { byId('ai-no-key').classList.remove('hidden'); Sound.play('error'); animOnce(byId('ai-no-key'), 'shake'); return; }
     input.value = ''; autoGrow(input);
-    if (!aiChatHistory.length) aiSystemContext = buildCoachSystemPrompt();
+
+    // First message creates and saves the chat
+    var chat = coachChatId ? getChat(coachChatId) : null;
+    if (!chat) {
+        chat = { id: genId(), title: chatTitleFrom(msg), created: Date.now(), updated: Date.now(), model: coachModel(), messages: [] };
+        setCurrentChat(chat.id);
+    }
+    chat.messages.push({ role: 'user', content: msg });
+    chat.updated = Date.now();
+    putChat(chat);
+    aiChatHistory = chat.messages.slice();
+    byId('coach-title').textContent = chat.title;
+
+    if (aiSystemContextChat !== chat.id || !aiSystemContext) { aiSystemContext = buildCoachSystemPrompt(); aiSystemContextChat = chat.id; }
     byId('coach-suggest').classList.add('hidden');
     appendChatBubble('user', msg);
-    aiChatHistory.push({ role: 'user', content: msg });
     Sound.play('send');
     coachBusy = true; byId('coach-send').disabled = true;
     var bubble = document.createElement('div');
@@ -4340,31 +4362,36 @@ function sendCoachMessage(text) {
     bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
     byId('ai-chat-history').appendChild(bubble);
     scrollChat();
-    var pending = false, latest = '';
-    callClaude(aiChatHistory, function (t) {
+    var chatId = chat.id, pending = false, latest = '';
+    function stillOpen() { return coachChatId === chatId; }
+    callClaude(chat.messages, function (t) {
         latest = t;
-        if (pending) return; pending = true;
+        if (pending || !stillOpen()) return; pending = true;
         requestAnimationFrame(function () { pending = false; bubble.innerHTML = renderMarkdown(latest); scrollChat(); });
     }, function (full) {
-        bubble.innerHTML = renderMarkdown(full);
-        aiChatHistory.push({ role: 'assistant', content: full });
+        var c = getChat(chatId);
+        if (c) { c.messages.push({ role: 'assistant', content: full }); c.updated = Date.now(); putChat(c); }
+        if (stillOpen()) { bubble.innerHTML = renderMarkdown(full); aiChatHistory = c ? c.messages.slice() : aiChatHistory; scrollChat(); }
         coachBusy = false; byId('coach-send').disabled = false;
         Sound.play('receive');
-        scrollChat();
     }, function (err) {
-        bubble.classList.add('err');
-        bubble.textContent = 'Error: ' + err;
-        aiChatHistory.pop();
+        // Take the unanswered message back out so the chat stays clean, and put it back in the box to retry
+        var c = getChat(chatId);
+        if (c) {
+            c.messages.pop();
+            if (c.messages.length) putChat(c);
+            else { saveChats(loadChats().filter(function (x) { return x.id !== chatId; })); if (stillOpen()) setCurrentChat(null); }
+        }
+        if (stillOpen()) {
+            bubble.classList.add('err');
+            bubble.textContent = 'Error: ' + err;
+            aiChatHistory = c && c.messages.length ? c.messages.slice() : [];
+            if (!input.value) { input.value = msg; autoGrow(input); }
+            if (!aiChatHistory.length) byId('coach-title').textContent = 'New chat';
+        }
         coachBusy = false; byId('coach-send').disabled = false;
         Sound.play('error');
     });
-}
-function coachReset() {
-    aiChatHistory = []; aiSystemContext = '';
-    byId('ai-chat-history').innerHTML = '';
-    renderCoach();
-    Sound.play('nav');
-    toast('Fresh conversation. Coach re-read your log.', 'warm', 'refresh');
 }
 function autoGrow(t) { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; }
 
@@ -4410,7 +4437,7 @@ function celebratePR(ex, w, prev) {
         '<p class="pr-weight heat-text"><span ' + countAttr(w) + ' data-dur="1400">0</span><span style="font-size:1.6rem;-webkit-text-fill-color:#aa9d8e"> ' + ul + '</span></p>' +
         '<p class="pr-ex">' + esc(ex) + '</p>' +
         '<p class="pr-prev">Previous best: ' + fmtW(prev) + ' ' + ul + ' · +' + fmtW(w - prev) + ' ' + ul + '</p>' +
-        '<p class="pr-quip">' + esc(pick(COPY.prQuips)) + '</p></div><p class="tap-close">Tap anywhere to keep lifting</p>';
+        '</div><p class="tap-close">Tap to close</p>';
     document.body.appendChild(el);
     sparkBurst(el.querySelector('canvas'), { y: 0.36 });
     setTimeout(function () { countUps(el); }, 600);
@@ -4424,16 +4451,14 @@ function showFinishOverlay(sum) {
     var el = document.createElement('div');
     el.className = 'overlay finish-overlay';
     el.innerHTML = '<canvas></canvas><div class="card edge finish-card">' +
-        '<div class="onb-art" style="margin:0 0 6px">' + lifterSVG('deadlift') + '</div>' +
-        '<p class="eyebrow">' + esc(sum.name) + '</p><h2 class="title-xl">Session<br>complete</h2>' +
-        '<p class="sub">' + esc(pick(COPY.finished)) + '</p>' +
-        '<div class="grid-2">' +
+        '<p class="eyebrow">' + esc(sum.name) + '</p><h2 class="title-xl">Workout<br>complete</h2>' +
+        '<div class="grid-3 mt-16">' +
+        '<div class="metric"><p class="num"><span ' + countAttr(sum.exercises) + '>0</span></p><p class="label">Exercises</p></div>' +
         '<div class="metric"><p class="num"><span ' + countAttr(sum.sets) + '>0</span></p><p class="label">Sets</p></div>' +
-        '<div class="metric"><p class="num"><span ' + countAttr(sum.exercises) + '>0</span></p><p class="label">Lifts</p></div>' +
-        '<div class="metric"><p class="num heat-text"><span ' + countAttr(sum.volume) + '>0</span></p><p class="label">' + ul + ' moved</p></div>' +
-        '<div class="metric"><p class="num"><span ' + countAttr(sum.minutes) + '>0</span><span class="u">min</span></p><p class="label">Time under iron</p></div></div>' +
+        '<div class="metric"><p class="num"><span ' + countAttr(sum.volume) + '>0</span></p><p class="label">Volume · ' + ul + '</p></div></div>' +
+        (sum.prs.length ? '<p class="label mt-16 mb-8">New PRs</p>' : '') +
         (sum.prs.length ? '<div class="chip-row mb-16" style="justify-content:center">' + sum.prs.map(function (p) { return '<span class="chip pr">' + ico('trophy', 'ico-sm') + esc(p.ex) + ' ' + fmtW(p.w) + '</span>'; }).join('') + '</div>' : '') +
-        '<button class="btn btn-heat btn-block knurl" data-close>Back to base</button></div>';
+        '<button class="btn btn-heat btn-block" data-close>Done</button></div>';
     document.body.appendChild(el);
     if (sum.prs.length) sparkBurst(el.querySelector('canvas'), { y: 0.2, n: 120, speed: 9 });
     setTimeout(function () { countUps(el); }, 350);
@@ -4476,7 +4501,10 @@ var ACTIONS = {
     renderDayAnalytics: function (el) { renderDayAnalytics(parseInt(el.getAttribute('data-idx'), 10)); },
     sendCoach: function () { sendCoachMessage(); },
     coachSuggest: function (el) { sendCoachMessage(el.getAttribute('data-q')); },
-    coachReset: coachReset,
+    coachNew: coachNew,
+    openChat: function (el) { openChat(el.getAttribute('data-id')); navTo('view-coach', { back: true }); },
+    renameChat: function (el) { renameChat(el.getAttribute('data-id')); },
+    deleteChat: function (el) { deleteChat(el.getAttribute('data-id')); },
     toggleTheme: toggleTheme, toggleRestTimer: toggleRestTimer, toggleSound: toggleSound, toggleHaptics: toggleHaptics, toggleSoundQuick: toggleSoundQuick,
     settingsUnit: function (el) { settingsSelectUnit(el.getAttribute('data-u')); },
     saveProfile: saveProfileSettings, savePrefs: savePreferenceSettings, saveKey: saveClaudeKey,
@@ -4485,7 +4513,7 @@ var ACTIONS = {
     settingsDayCount: function (el) { settingsSelectDayCount(parseInt(el.getAttribute('data-n'), 10)); },
     saveProgram: saveProgramSettings,
     saveCoachNotes: saveCoachNotes,
-    openCoach: function () { navTo('view-analytics'); switchAnalyticsTab('ai', true); },
+    openCoach: function () { navTo('view-coach'); },
     toggleChip: function (el) { toggleChip(el); },
     toggleGroup: function (el) { toggleGroup(el.getAttribute('data-m')); },
     addMuscleGroup: addMuscleGroup,
@@ -4498,12 +4526,11 @@ var ACTIONS = {
     onbDayCount: function (el) { selectDayCount(parseInt(el.getAttribute('data-n'), 10)); },
     finishOnboarding: finishOnboarding,
     heroLift: function (el) { Hero.setLift(parseInt(el.getAttribute('data-lift'), 10), true); },
-    dismissRest: dismissRestTimer,
-    comingSoon: function (el) { Sound.play('error'); toast(el.getAttribute('data-what') + ' is still in the forge. Soon.', 'warm', 'lock'); }
+    dismissRest: dismissRestTimer
 };
 // actions that make their own sound (so the dispatcher stays quiet)
-var SELF_SFX = { pauseWorkout: 1, finishWorkout: 1, cancelWorkout: 1, saveSet: 1, startSession: 1, resumeActiveSession: 1, openWorkoutInit: 1, toggleTheme: 1, toggleRestTimer: 1, toggleSound: 1, toggleHaptics: 1, toggleSoundQuick: 1, settingsUnit: 1, saveProfile: 1, savePrefs: 1, saveKey: 1, saveCoachNotes: 1, analyticsTab: 1, toggleChip: 1, comingSoon: 1, onbNext: 1, finishOnboarding: 1, heroLift: 1, exportData: 1, addMuscleGroup: 1, addExercise: 1, sendCoach: 1, coachSuggest: 1, settingsDayCount: 1, setTrainingMode: 1, saveProgram: 1, showLastSession: 1 };
-var NAV_SFX = { openCoach: 'nav', nav: 'nav', back: 'back', selectCategory: 'nav', startExercise: 'nav', showSessionDetail: 'nav', openLastSessionDetail: 'nav', searchExercise: 'nav', focusSearch: 'nav', selectSearchExercise: 'tap' };
+var SELF_SFX = { pauseWorkout: 1, finishWorkout: 1, cancelWorkout: 1, saveSet: 1, startSession: 1, resumeActiveSession: 1, openWorkoutInit: 1, toggleTheme: 1, toggleRestTimer: 1, toggleSound: 1, toggleHaptics: 1, toggleSoundQuick: 1, settingsUnit: 1, saveProfile: 1, savePrefs: 1, saveKey: 1, saveCoachNotes: 1, analyticsTab: 1, toggleChip: 1, onbNext: 1, finishOnboarding: 1, heroLift: 1, exportData: 1, addMuscleGroup: 1, addExercise: 1, sendCoach: 1, coachSuggest: 1, settingsDayCount: 1, setTrainingMode: 1, saveProgram: 1, showLastSession: 1 };
+var NAV_SFX = { openCoach: 'nav', openChat: 'nav', coachNew: 'nav', nav: 'nav', back: 'back', selectCategory: 'nav', startExercise: 'nav', showSessionDetail: 'nav', openLastSessionDetail: 'nav', searchExercise: 'nav', focusSearch: 'nav', selectSearchExercise: 'tap' };
 function initDispatcher() {
     document.addEventListener('click', function (e) {
         var el = e.target.closest('[data-act]');
@@ -4551,17 +4578,10 @@ function initInputs() {
     document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-new-ex]')) { e.preventDefault(); addExercise(e.target.getAttribute('data-new-ex')); } });
     byId('import-file').addEventListener('change', importData);
     byId('coach-model').addEventListener('change', saveCoachModel);
+    byId('coach-chat-search').addEventListener('input', debounce(renderChatList, 150));
     // hide the dock while the keyboard is up
-    document.addEventListener('focusin', function (e) { if (e.target.matches('input,textarea') && !e.target.closest('.sheet')) document.body.classList.add('typing'); });
-    document.addEventListener('focusout', function () { setTimeout(function () { if (!document.activeElement || !document.activeElement.matches('input,textarea')) document.body.classList.remove('typing'); }, 50); });
-}
-function initEmbers() {
-    if (REDUCED) return;
-    var box = byId('ambient-embers'), html = '';
-    for (var i = 0; i < 14; i++) {
-        html += '<i style="left:' + (Math.random() * 100).toFixed(1) + '%;--dx:' + ((Math.random() - 0.5) * 120).toFixed(0) + 'px;animation-duration:' + (9 + Math.random() * 12).toFixed(1) + 's;animation-delay:' + (-Math.random() * 20).toFixed(1) + 's;opacity:' + (0.3 + Math.random() * 0.6).toFixed(2) + ';transform:scale(' + (0.5 + Math.random()).toFixed(2) + ')"></i>';
-    }
-    box.innerHTML = html;
+    document.addEventListener('focusin', function (e) { if (e.target.matches('input,textarea') && !e.target.closest('.sheet')) document.body.classList.add('kb-open'); });
+    document.addEventListener('focusout', function () { setTimeout(function () { if (!document.activeElement || !document.activeElement.matches('input,textarea')) document.body.classList.remove('kb-open'); }, 50); });
 }
 function initHistory() {
     try { history.pushState({ view: 'view-landing' }, '', ''); } catch (e) {}
@@ -4593,7 +4613,8 @@ function boot() {
         Chart.defaults.font.family = 'Barlow, Helvetica Neue, Arial, sans-serif';
         Chart.defaults.color = '#aa9d8e';
     }
-    initDispatcher(); initTouchFX(); initSteppers(); initLongPress(); initInputs(); initScrollShadows(); initEmbers();
+    initDispatcher(); initTouchFX(); initSteppers(); initLongPress(); initInputs(); initScrollShadows();
+    try { var lastChat = localStorage.getItem(COACH_CURRENT_KEY); if (lastChat && getChat(lastChat)) openChat(lastChat); } catch (e) {}
     document.addEventListener('pointerdown', function once() { Sound.unlock(); document.removeEventListener('pointerdown', once); }, { passive: true });
     injectLifters(document);
 
