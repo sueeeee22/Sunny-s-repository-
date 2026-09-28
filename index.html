@@ -1059,6 +1059,22 @@
             <span class="text-yellow-400 text-sm font-bold">Save API Key</span>
         </button>
         <div id="settings-saved-msg" class="hidden text-center text-green-400 text-xs mt-2 font-bold">✓ Key Saved</div>
+
+        <div class="settings-row" style="margin-top:14px;">
+            <span class="text-sm font-bold">Coach Model</span>
+            <select id="coach-model" class="text-input w-40 text-sm" style="text-align:right" onchange="saveCoachModel()">
+                <option value="claude-opus-5-5">Opus 5.5 (smartest)</option>
+                <option value="claude-sonnet-5">Sonnet 5 (cheaper)</option>
+            </select>
+        </div>
+
+        <p class="label" style="margin:16px 0 8px;">Coach Notes</p>
+        <p class="text-gray-600 text-xs mb-2">Injuries, PT rules, goals, equipment. The coach reads this before every chat and treats it as rules. Stored only on this device. Update it when your PT changes something.</p>
+        <textarea id="coach-notes-field" class="api-key-input mb-3" rows="8" style="width:100%;resize:vertical;font-size:0.8rem;line-height:1.4;" placeholder="e.g. Left QL strain. PT: suitcase carries + trunk rotation 3x/week. Squat to box at parallel. Moderate brace..."></textarea>
+        <button onclick="saveCoachNotes()" class="window-btn w-full h-11 bg-yellow-900/20 border-yellow-800">
+            <span class="text-yellow-400 text-sm font-bold">Save Coach Notes</span>
+        </button>
+        <div id="coach-notes-saved-msg" class="hidden text-center text-green-400 text-xs mt-2 font-bold">✓ Notes Saved</div>
     </div>
 
     <!-- Data -->
@@ -1695,6 +1711,9 @@ var VERSION_KEY        = 'bigsunny_archive_version';
 var SETTINGS_KEY       = 'bigsunny_settings';
 var ONBOARD_KEY        = 'bigsunny_onboarded';
 var AI_KEY_STORE       = 'bigsunny_claude_key';
+var AI_MODEL_STORE     = 'bigsunny_coach_model';
+var AI_NOTES_STORE     = 'bigsunny_coach_notes';
+var AI_DEFAULT_MODEL   = 'claude-opus-5-5';
 var SESSION_KEY        = 'bigsunny_active_session';
 var MIGRATION_KEY      = 'bigsunny_migration_v2';
 
@@ -2846,6 +2865,17 @@ window.saveClaudeKey = function() {
     var msg = document.getElementById('settings-saved-msg'); msg.classList.remove('hidden');
     setTimeout(function() { msg.classList.add('hidden'); }, 2000);
 };
+window.saveCoachModel = function() {
+    localStorage.setItem(AI_MODEL_STORE, document.getElementById('coach-model').value);
+};
+window.saveCoachNotes = function() {
+    localStorage.setItem(AI_NOTES_STORE, document.getElementById('coach-notes-field').value.trim());
+    // Start a fresh coach chat so the new notes take effect immediately
+    aiChatHistory = []; aiSystemContext = '';
+    var hist = document.getElementById('ai-chat-history'); if (hist) hist.innerHTML = '';
+    var msg = document.getElementById('coach-notes-saved-msg'); msg.classList.remove('hidden');
+    setTimeout(function() { msg.classList.add('hidden'); }, 2000);
+};
 
 var settingsDayCount = 5;
 window.setTrainingMode = function(mode) {
@@ -2972,6 +3002,8 @@ window.navTo = function(viewId) {
         document.getElementById('e1rm-formula').value = s.e1rmFormula || 'epley';
         document.getElementById('default-sets').value = s.defaultSets || '';
         document.getElementById('default-reps').value = s.defaultReps || '';
+        document.getElementById('coach-model').value = localStorage.getItem(AI_MODEL_STORE) || AI_DEFAULT_MODEL;
+        document.getElementById('coach-notes-field').value = localStorage.getItem(AI_NOTES_STORE) || '';
         updateSettingsProgramDisplay();
     }
     if (viewId === 'view-settings-exercises') { renderExerciseDbEditor(); }
@@ -3187,18 +3219,38 @@ var aiSystemContext = '';
 function callClaude(messages, onSuccess, onError) {
     var key = localStorage.getItem(AI_KEY_STORE);
     if (!key) { document.getElementById('ai-no-key').classList.remove('hidden'); return; }
+    var model = localStorage.getItem(AI_MODEL_STORE) || AI_DEFAULT_MODEL;
     fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1500, system: aiSystemContext, messages: messages })
+        body: JSON.stringify({
+            model: model,
+            max_tokens: 2000,
+            // Cache the (large) training-log context so follow-up messages are cheaper
+            system: [{ type: 'text', text: aiSystemContext, cache_control: { type: 'ephemeral' } }],
+            messages: messages
+        })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        var text = data.content && data.content[0] && data.content[0].text;
+        var text = (data.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('\n').trim();
         if (!text) { text = 'No response. Check your API key.'; if (data.error) text = 'Error: ' + data.error.message; }
         onSuccess(text);
     })
     .catch(function(err) { onError(err.message); });
+}
+
+// Compress a session's sets: [{w:235,r:5}x3] -> "3x5@235"
+function compactSets(sets) {
+    var out = [], i = 0;
+    var valid = (sets || []).filter(function(s){ return (parseFloat(s.w) || 0) > 0 || (parseFloat(s.r) || 0) > 0; });
+    while (i < valid.length) {
+        var j = i;
+        while (j + 1 < valid.length && valid[j+1].w == valid[i].w && valid[j+1].r == valid[i].r) j++;
+        out.push((j - i + 1) + 'x' + valid[i].r + '@' + valid[i].w);
+        i = j + 1;
+    }
+    return out.join(', ');
 }
 
 function buildCoachSystemPrompt() {
@@ -3207,58 +3259,55 @@ function buildCoachSystemPrompt() {
     var bw = parseFloat(s.bw) || 175;
     var ul = s.unit || 'lbs';
     var userName = s.name || 'the athlete';
+    var notes = localStorage.getItem(AI_NOTES_STORE) || '';
+    var today = new Date().toISOString().split('T')[0];
 
-    // Build PR map
+    // Best-ever top single weight per exercise (plus e1RM)
     var prMap = {};
     all.forEach(function(w) {
         var best = getBestE1RM(w.sets);
-        if (!prMap[w.exercise] || best > prMap[w.exercise].e1rm)
-            prMap[w.exercise] = { e1rm: best, date: w.date, maxW: Math.max.apply(null, w.sets.map(function(s){return parseFloat(s.w);})) };
+        var maxW = Math.max.apply(null, (w.sets || []).map(function(x){ return parseFloat(x.w) || 0; }));
+        if (!prMap[w.exercise] || maxW > prMap[w.exercise].maxW)
+            prMap[w.exercise] = { e1rm: best, date: w.date, maxW: maxW };
     });
-    var prEntries = Object.keys(prMap).map(function(k){return[k,prMap[k]];});
-    prEntries.sort(function(a,b){return b[1].maxW-a[1].maxW;});
-    var prSummary = prEntries.slice(0,25).map(function(e){return e[0]+': '+e[1].maxW+ul+' (e1RM '+e[1].e1rm+ul+', '+e[1].date+')';}).join('; ');
+    var big3 = ['Squat', 'Bench Press', 'Deadlift'].map(function(k) {
+        var p = prMap[k]; return k + ': ' + (p ? p.maxW + ul + ' (' + p.date + ')' : 'none logged');
+    }).join(' | ');
 
-    var sq = prMap['Squat']?prMap['Squat'].maxW:0;
-    var bp = prMap['Bench Press']?prMap['Bench Press'].maxW:0;
-    var dl = prMap['Deadlift']?prMap['Deadlift'].maxW:0;
-    var totalSessions = uniqueSorted(all.map(function(w){return w.date;})).length;
-
-    // Recent 45 days of training detail
-    var cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 45);
-    var recent = all.filter(function(w){ return new Date(w.date) >= cutoff; });
-    var recentByDate = {};
-    recent.forEach(function(w) {
-        if (!recentByDate[w.date]) recentByDate[w.date] = [];
-        recentByDate[w.date].push(w.exercise + ' ' + w.sets.map(function(s){return s.w+'x'+s.r;}).join(','));
+    // Full history, one line per day, oldest first
+    var byDate = {};
+    all.forEach(function(w) {
+        var sets = compactSets(w.sets);
+        if (!sets && !w.notes) return;
+        if (!byDate[w.date]) byDate[w.date] = { day: (w.program || '').replace(/^Log:\s*/, ''), items: [] };
+        byDate[w.date].items.push(w.exercise + (sets ? ' ' + sets : '') + (w.notes ? ' [' + w.notes + ']' : ''));
     });
-    var recentDates = Object.keys(recentByDate).sort();
-    var recentLog = recentDates.map(function(d){ return d + ': ' + recentByDate[d].join(' | '); }).join('\n');
+    var fullLog = Object.keys(byDate).sort().map(function(d) {
+        return d + (byDate[d].day ? ' (' + byDate[d].day + ')' : '') + ': ' + byDate[d].items.join(' | ');
+    }).join('\n');
+    var dates = Object.keys(byDate).sort();
 
-    // Frequency analysis
-    var exFreq = {};
-    all.forEach(function(w) { exFreq[w.exercise] = (exFreq[w.exercise]||0) + 1; });
-    var freqList = Object.keys(exFreq).map(function(k){return[k,exFreq[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,15);
-    var freqStr = freqList.map(function(e){return e[0]+' ('+e[1]+'x)';}).join(', ');
-
-    return 'You are a world-class powerlifting coach embedded in a training app called Big Sunny\'s Powerlifting App. ' +
-        'You have complete access to the athlete\'s training data below. Use it to give specific, data-driven advice. ' +
-        'Be direct, knowledgeable, and coach-like. Use their actual numbers. No fluff. ' +
-        'You know periodization, RPE, percentage-based programming, weak point analysis, injury prevention, meet prep, nutrition for strength athletes, and recovery protocols. ' +
-        'When asked about technique, programming, or anything training-related, give expert-level answers grounded in evidence-based strength training. ' +
-        'If asked about something outside powerlifting (general fitness, nutrition, life stuff), still be helpful but bring it back to how it affects their training.\n\n' +
-        '--- ATHLETE PROFILE ---\n' +
-        'Name: ' + userName + '\n' +
-        'Bodyweight: ' + bw + ' ' + ul + '\n' +
-        'Total logged sessions: ' + totalSessions + '\n' +
-        'Training history spans: ' + (all.length > 0 ? all[all.length-1].date + ' to ' + all[0].date : 'no data') + '\n\n' +
-        '--- BIG 3 PRs ---\n' +
-        'Squat: ' + sq + ul + ' | Bench: ' + bp + ul + ' | Deadlift: ' + dl + ul + ' | Total: ' + (sq+bp+dl) + ul + '\n' +
-        'Wilks: ' + calcWilks(sq+bp+dl, bw) + '\n\n' +
-        '--- ALL EXERCISE PRs (top 25) ---\n' + prSummary + '\n\n' +
-        '--- MOST FREQUENT EXERCISES ---\n' + freqStr + '\n\n' +
-        '--- LAST 45 DAYS OF TRAINING ---\n' + recentLog + '\n';
+    return 'You are the strength coach inside Big Sunny\'s Powerlifting App, coaching ' + userName + '. ' +
+        'Today is ' + today + '.\n\n' +
+        '--- HOW TO COACH ---\n' +
+        '1. Ground every recommendation in the athlete\'s actual log below. Cite dates and numbers.\n' +
+        '2. The COACH NOTES section is written by the athlete and may contain injury details and instructions from their physical therapist or doctor. Treat those as hard constraints. Never override a clinician\'s instruction; if you think one should change, say so and tell the athlete to ask their clinician.\n' +
+        '3. When there is an injury in the notes, be conservative: progress one variable at a time, about 5% per week at most on the main lifts, and prefer adding load slowly over adding new exercises.\n' +
+        '4. If the athlete reports pain above 3/10 during a lift, or pain that does not settle within 24 hours, tell them to back off the load and check with their clinician. Do not diagnose.\n' +
+        '5. Be honest about uncertainty. If the log is missing sessions or the data does not support a conclusion, say so rather than guessing. Rep-max estimates are rough; say so when you use them.\n' +
+        '6. Be direct and concise. Plain language, complete sentences. Dry humor is welcome. Use short numbered lists for session plans.\n\n' +
+        '--- HOW TO READ THE LOG ---\n' +
+        'Format: date (program day): Exercise SETSxREPS@WEIGHT [notes]. Example: "3x5@235" means 3 sets of 5 reps at 235 ' + ul + '.\n' +
+        'Quirks: For machines and cable exercises the weight is usually a pin or plate-stack number, not ' + ul + '. ' +
+        'For carries and holds, the "reps" number is seconds. Bodyweight movements may be logged at bodyweight (' + bw + ') or 0. ' +
+        'Notes like "Cheat last two reps" mean the final reps used momentum. Some days have missing sessions because the athlete did not log them. ' +
+        'Occasional typos exist (e.g. a dumbbell logged as 5 that was clearly 50); use judgment.\n\n' +
+        '--- ATHLETE ---\n' +
+        'Name: ' + userName + ' | Bodyweight: ' + bw + ' ' + ul + '\n' +
+        'Best logged singles/top sets: ' + big3 + '\n' +
+        'Log spans ' + (dates.length ? dates[0] + ' to ' + dates[dates.length - 1] : 'no data') + ', ' + dates.length + ' training days.\n\n' +
+        '--- COACH NOTES (from the athlete; treat as rules) ---\n' + (notes || '(none provided)') + '\n\n' +
+        '--- FULL TRAINING LOG (oldest first) ---\n' + fullLog + '\n';
 }
 
 function appendChatBubble(role, text) {
