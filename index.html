@@ -459,7 +459,7 @@ body.light .msg strong{color:var(--ember-2)}
 .suggest button{display:flex;align-items:center;gap:10px;padding:13px 14px;text-align:left;border-radius:16px;background:var(--surface);border:1px solid var(--line);font-size:.94rem;color:var(--text-2);transition:transform .15s,border-color .2s}
 .suggest button:active{transform:scale(.98);border-color:rgba(var(--ember-rgb),.5)}
 .suggest button .ico{color:var(--ember-2)}
-.composer{position:sticky;bottom:calc(var(--dock-space) + env(safe-area-inset-bottom) - 6px);z-index:20;display:flex;align-items:flex-end;gap:8px;padding:8px 8px 8px 14px;margin-top:8px;border-radius:22px;background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--line-2);box-shadow:var(--shadow-lg)}
+.composer{position:sticky;bottom:calc(var(--dock-space) + env(safe-area-inset-bottom) - 6px);z-index:20;display:flex;align-items:flex-end;gap:8px;padding:8px 8px 8px 14px;margin-top:8px;border-radius:22px;background:var(--surface-2);border:1px solid var(--line-2);box-shadow:var(--shadow-lg)}
 .composer textarea{flex:1;min-height:40px;max-height:140px;padding:9px 0;background:transparent;border:0;outline:0;resize:none;font-size:1rem;line-height:1.35;color:var(--text)}
 .composer textarea::placeholder{color:var(--text-3)}
 .send{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--heat);color:var(--on-heat);flex:none;transition:transform .2s var(--spring)}
@@ -4293,6 +4293,26 @@ function scrollChat() {
     var r = c.lastChild.getBoundingClientRect();
     if (r.bottom > window.innerHeight - 140) window.scrollBy({ top: r.bottom - window.innerHeight + 170, behavior: REDUCED ? 'auto' : 'smooth' });
 }
+// Like the Claude app: when you send, your message moves to the top of the screen and the
+// reply fills in below it. The screen never moves on its own while the reply is coming in,
+// so you can read from the start and scroll whenever you want.
+function chatSpacer() {
+    var sp = byId('chat-spacer');
+    if (!sp) { sp = document.createElement('div'); sp.id = 'chat-spacer'; sp.setAttribute('aria-hidden', 'true'); }
+    byId('ai-chat-history').appendChild(sp);
+    return sp;
+}
+function topbarHeight() { var tb = $('#view-coach .topbar'); return tb ? tb.getBoundingClientRect().height : 70; }
+function sizeChatSpacer(userEl, lastEl) {
+    var sp = byId('chat-spacer'); if (!sp || !userEl || !lastEl) return;
+    var used = lastEl.getBoundingClientRect().bottom - userEl.getBoundingClientRect().top;
+    var below = document.documentElement.scrollHeight - (lastEl.getBoundingClientRect().bottom + window.scrollY) - sp.offsetHeight;
+    sp.style.height = Math.max(0, window.innerHeight - topbarHeight() - 12 - used - below) + 'px';
+}
+function pinToTop(el) {
+    var y = el.getBoundingClientRect().top + window.scrollY - topbarHeight() - 12;
+    window.scrollTo({ top: Math.max(0, y), behavior: REDUCED ? 'auto' : 'smooth' });
+}
 function callClaude(messages, onDelta, onDone, onError) {
     var key = localStorage.getItem(AI_KEY_STORE);
     if (!key) { byId('ai-no-key').classList.remove('hidden'); onError('No API key saved.'); return; }
@@ -4354,24 +4374,26 @@ function sendCoachMessage(text) {
 
     if (aiSystemContextChat !== chat.id || !aiSystemContext) { aiSystemContext = buildCoachSystemPrompt(); aiSystemContextChat = chat.id; }
     byId('coach-suggest').classList.add('hidden');
-    appendChatBubble('user', msg);
+    var userEl = appendChatBubble('user', msg, true);
     Sound.play('send');
     coachBusy = true; byId('coach-send').disabled = true;
     var bubble = document.createElement('div');
     bubble.className = 'msg ai';
     bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
     byId('ai-chat-history').appendChild(bubble);
-    scrollChat();
+    chatSpacer();
+    sizeChatSpacer(userEl, bubble);
+    pinToTop(userEl);
     var chatId = chat.id, pending = false, latest = '';
     function stillOpen() { return coachChatId === chatId; }
     callClaude(chat.messages, function (t) {
         latest = t;
         if (pending || !stillOpen()) return; pending = true;
-        requestAnimationFrame(function () { pending = false; bubble.innerHTML = renderMarkdown(latest); scrollChat(); });
+        requestAnimationFrame(function () { pending = false; bubble.innerHTML = renderMarkdown(latest); sizeChatSpacer(userEl, bubble); });
     }, function (full) {
         var c = getChat(chatId);
         if (c) { c.messages.push({ role: 'assistant', content: full }); c.updated = Date.now(); putChat(c); }
-        if (stillOpen()) { bubble.innerHTML = renderMarkdown(full); aiChatHistory = c ? c.messages.slice() : aiChatHistory; scrollChat(); }
+        if (stillOpen()) { bubble.innerHTML = renderMarkdown(full); aiChatHistory = c ? c.messages.slice() : aiChatHistory; sizeChatSpacer(userEl, bubble); }
         coachBusy = false; byId('coach-send').disabled = false;
         Sound.play('receive');
     }, function (err) {
