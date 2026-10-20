@@ -828,6 +828,7 @@ body.kb-open .dock{transform:translate(-50%,170%)}
   </div>
 
   <div class="card edge total-strip" id="total-strip"></div>
+  <div class="card edge total-strip" id="e1rm-strip"></div>
 
   <button id="active-session-banner" class="live-card hidden mb-12" data-act="resumeActiveSession">
     <div class="grow">
@@ -1120,6 +1121,7 @@ body.kb-open .dock{transform:translate(-50%,170%)}
   <div class="group">
     <div class="group-head"><span class="gi" style="color:var(--red);background:rgba(255,93,82,.1);border-color:rgba(255,93,82,.3)"><svg class="ico"><use href="#i-warn"/></svg></span><div><p class="h3">Reset</p><p class="tiny">Re-run the setup questions</p></div></div>
     <div class="list">
+      <button class="list-row hidden" id="remove-preloaded-row" data-act="removePreloaded"><div><p class="lr-t red">Remove Big Sunny's workouts</p><p class="lr-s" id="remove-preloaded-sub">Pre-loaded history that isn't yours</p></div><svg class="ico red"><use href="#i-trash"/></svg></button>
       <button class="list-row" data-act="resetOnboarding"><div><p class="lr-t red">Reset &amp; re-run setup</p><p class="lr-s">Workout history stays put</p></div><svg class="ico red"><use href="#i-refresh"/></svg></button>
     </div>
   </div>
@@ -1815,6 +1817,13 @@ function loadWorkouts() {
         if (currentVersion !== ARCHIVE_VERSION) {
             var existing = [];
             try { existing = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch (e) {}
+            // Brand-new phone: start with an empty log (Big Sunny's history is only for his own phone)
+            if (!currentVersion && !existing.length) {
+                localStorage.setItem(STORAGE_KEY, '[]');
+                localStorage.setItem(VERSION_KEY, ARCHIVE_VERSION);
+                _wCache = []; _wVer++;
+                return _wCache;
+            }
             var userLogged = existing.filter(function (w) { return w.program && w.program.indexOf('Log:') === 0; });
             var merged = ARCHIVE_WORKOUTS.concat(userLogged);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
@@ -1825,11 +1834,7 @@ function loadWorkouts() {
         var stored = localStorage.getItem(STORAGE_KEY);
         if (stored) { _wCache = JSON.parse(stored); _wVer++; return _wCache; }
     } catch (e) {}
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(ARCHIVE_WORKOUTS));
-        localStorage.setItem(VERSION_KEY, ARCHIVE_VERSION);
-    } catch (e) {}
-    _wCache = ARCHIVE_WORKOUTS.slice(); _wVer++;
+    _wCache = []; _wVer++;
     return _wCache;
 }
 function saveWorkouts(w) {
@@ -1883,6 +1888,20 @@ function calcE1RM(weight, reps) {
     if (formula === 'lombardi') return Math.round(weight * Math.pow(reps, 0.1));
     return Math.round(weight * (1 + reps / 30));
 }
+function bestE1RMFor(name) {
+    var best = 0;
+    loadWorkouts().forEach(function (w) { if (w.exercise === name && w.sets) { var e = getBestE1RM(w.sets); if (e > best) best = e; } });
+    return best;
+}
+// Entries that came pre-loaded from Big Sunny's built-in history (matched by date and sets, since some lift names were renamed on load)
+var _archiveKeys = null;
+function entryKey(w) { return w.date + '|' + (w.sets || []).map(function (s) { return s.w + 'x' + s.r; }).join(','); }
+function isPreloaded(w) {
+    if (!_archiveKeys) { _archiveKeys = {}; ARCHIVE_WORKOUTS.forEach(function (a) { _archiveKeys[entryKey(a)] = 1; }); }
+    return !!_archiveKeys[entryKey(w)];
+}
+function preloadedCount() { return loadWorkouts().filter(isPreloaded).length; }
+function isBigSunny() { return /sunny/i.test(S().name || ''); }
 function getBestE1RM(sets) {
     var best = 0;
     sets.forEach(function (s) { var e = calcE1RM(parseFloat(s.w), parseInt(s.r, 10)); if (e > best) best = e; });
@@ -2580,7 +2599,7 @@ var Hero = (function () {
         byId('hud-unit').textContent = unit;
         byId('hud-meta').textContent = info && w
             ? 'Set ' + formatDate(info.date) + ' · ' + (info.r > 1 ? info.r + ' reps' : 'single')
-            : 'Nothing logged yet. Empty bar, full potential.';
+            : 'Nothing logged yet';
         var key = unit + '|' + i + '|' + w;
         if (key !== loadedKey) { loadedKey = key; setLoad(platesFor(w, unit), animate); }
     }
@@ -2867,6 +2886,13 @@ function renderLanding() {
         '<div><p class="label">SBD total</p><p class="num mt-4"><span ' + countAttr(total) + '>0</span> <span class="small muted">' + ul + '</span></p></div>' +
         '<div class="center"><p class="label">Wilks</p><p class="num mt-4 heat-text"><span ' + countAttr(wilks) + '>0</span></p></div>' +
         '<div style="text-align:right"><p class="label">Bodyweight</p><p class="num mt-4"><span ' + countAttr(bw) + '>0</span> <span class="small muted">' + ul + '</span></p></div>';
+
+    // estimated 1RMs
+    var eS = bestE1RMFor('Squat'), eB = bestE1RMFor('Bench Press'), eD = bestE1RMFor('Deadlift');
+    byId('e1rm-strip').innerHTML =
+        '<div><p class="label">Squat e1RM</p><p class="num mt-4"><span ' + countAttr(eS) + '>0</span> <span class="small muted">' + ul + '</span></p></div>' +
+        '<div class="center"><p class="label">Bench e1RM</p><p class="num mt-4"><span ' + countAttr(eB) + '>0</span> <span class="small muted">' + ul + '</span></p></div>' +
+        '<div style="text-align:right"><p class="label">Deadlift e1RM</p><p class="num mt-4"><span ' + countAttr(eD) + '>0</span> <span class="small muted">' + ul + '</span></p></div>';
 
     // live session
     var active = getActiveSession(), banner = byId('active-session-banner');
@@ -3536,7 +3562,19 @@ function flashSaved(id, text) {
     el.className = 'saved-tick'; el.innerHTML = ico('check', 'ico-sm') + (text || 'Saved');
     clearTimeout(el._t); el._t = setTimeout(function () { el.className = 'hidden'; }, 2200);
 }
+function removePreloaded() {
+    var n = preloadedCount(); if (!n) return;
+    appConfirm({ title: "Remove Big Sunny's workouts?", body: 'This deletes the ' + n + " pre-loaded workouts that came with the app. Anything you logged yourself stays.", yes: 'Remove', danger: true, icon: 'trash' }, function () {
+        saveWorkouts(loadWorkouts().filter(function (w) { return !isPreloaded(w); }));
+        Sound.play('delete');
+        toast(n + ' workouts removed.', 'good', 'trash');
+        populateSettings();
+    });
+}
 function populateSettings() {
+    var pre = preloadedCount();
+    byId('remove-preloaded-row').classList.toggle('hidden', !pre || isBigSunny());
+    byId('remove-preloaded-sub').textContent = pre + " pre-loaded workouts. Anything you logged stays.";
     var s = S();
     byId('settings-name').value = s.name || '';
     byId('settings-bw').value = s.bw || '';
@@ -4531,6 +4569,7 @@ var ACTIONS = {
     settingsUnit: function (el) { settingsSelectUnit(el.getAttribute('data-u')); },
     saveProfile: saveProfileSettings, savePrefs: savePreferenceSettings, saveKey: saveClaudeKey,
     resetOnboarding: resetOnboarding,
+    removePreloaded: removePreloaded,
     setTrainingMode: function (el) { setTrainingMode(el.getAttribute('data-mode')); },
     settingsDayCount: function (el) { settingsSelectDayCount(parseInt(el.getAttribute('data-n'), 10)); },
     saveProgram: saveProgramSettings,
@@ -4642,8 +4681,9 @@ function boot() {
 
     var onboarded = localStorage.getItem(ONBOARD_KEY);
     if (!onboarded) {
-        var existingVersion = localStorage.getItem(VERSION_KEY);
-        if (existingVersion) {
+        var existingVersion = localStorage.getItem(VERSION_KEY), hasSaved = false;
+        try { hasSaved = (JSON.parse(localStorage.getItem(STORAGE_KEY)) || []).length > 0; } catch (e) {}
+        if (existingVersion && hasSaved) {
             var s = getDefaultSettings(); s.name = 'Big Sunny'; saveSettings(s);
             localStorage.setItem(ONBOARD_KEY, '1');
             runMigrationV1(); ensureIds(); initApp();
