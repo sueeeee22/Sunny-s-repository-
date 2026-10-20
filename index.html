@@ -663,6 +663,10 @@ body.kb-open .dock{transform:translate(-50%,170%)}
 .chat,.composer{min-width:0;max-width:100%}
 .msg{overflow-wrap:anywhere}
 
+.pr-sets{font-size:1rem;color:var(--text)}
+.pr-sets b{color:var(--gold);font-weight:700}
+.pr-card .setpills{display:flex;flex-wrap:wrap;gap:6px}
+
 </style>
 </head>
 <body>
@@ -3472,6 +3476,17 @@ function selectSearchExercise(name) {
     byId('search-clear').classList.remove('hidden');
     renderExerciseResults(name);
 }
+// Sets and reps done at the PR weight, plus that whole session's sets
+function prSetsLine(matches, info, ul) {
+    var entry = null;
+    matches.forEach(function (m) { if (m.date === info.date && m.sets.some(function (x) { return parseFloat(x.w) === info.w; })) entry = entry || m; });
+    if (!entry) return '';
+    var atPR = groupSets(entry.sets.filter(function (x) { return parseFloat(x.w) === info.w; }));
+    var txt = atPR.map(function (g) { return g.n + ' set' + (g.n === 1 ? '' : 's') + ' × ' + g.r + ' rep' + (g.r === 1 ? '' : 's'); }).join(', ');
+    var whole = entry.sets.length > atPR.reduce(function (a, g) { return a + g.n; }, 0);
+    return '<p class="pr-sets mt-8"><b>' + txt + '</b> at ' + fmtW(info.w) + ' ' + ul + '</p>' +
+        (whole ? '<p class="label mt-12 mb-8">Full session that day</p><div class="setpills">' + setPills(entry.sets) + '</div>' : '');
+}
 function renderExerciseResults(exerciseName) {
     _search.selected = exerciseName;
     var res = byId('resultsArea'), ul = unitLabel();
@@ -3481,7 +3496,8 @@ function renderExerciseResults(exerciseName) {
     matches.forEach(function (m) { var e = getBestE1RM(m.sets); if (e > bestE) bestE = e; });
     var banner = info && info.w ? '<div class="pr-card mb-16"><span class="trophy">' + ico('trophy', 'ico-lg') + '</span>' +
         '<p class="eyebrow" style="color:var(--gold)">All-time PR</p><p class="num heat-text mt-8"><span ' + countAttr(info.w) + '>0</span><span class="small muted" style="-webkit-text-fill-color:var(--text-3)"> ' + ul + '</span></p>' +
-        '<p class="h3 mt-8">' + esc(exerciseName) + '</p><p class="small muted mt-4">Set ' + formatDate(info.date) + ' · ' + matches.length + ' sessions logged · best e1RM ' + fmtInt(bestE) + '</p>' +
+        '<p class="h3 mt-8">' + esc(exerciseName) + '</p>' + prSetsLine(matches, info, ul) +
+        '<p class="small muted mt-8">Set ' + formatDate(info.date) + ' · ' + matches.length + ' sessions logged · best e1RM ' + fmtInt(bestE) + '</p>' +
         '<canvas class="spark-mini" id="spark-mini"></canvas></div>' : '';
     res.innerHTML = banner + '<div class="section-title"><span class="label">History</span></div><div class="timeline" id="tl">' +
         matches.map(function (w) { return '<div class="tl-item' + (isEntryPR(w) ? ' pr' : '') + '">' + entryHTML(w, 'hist', { dateHead: true }) + '</div>'; }).join('') + '</div>';
