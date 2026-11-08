@@ -352,6 +352,11 @@ body.light .hero::before{background:radial-gradient(50% 50% at 50% 70%,rgba(255,
 .calc-text b{display:block;font-family:var(--f-display);font-size:1.25rem;color:var(--text);font-weight:800}
 .logset{margin-top:14px}
 .logset.pulse{animation:thump .35s ease}
+/* While typing in the logger, a Log set button rides just above the keyboard */
+.logset-float{position:fixed;left:12px;right:12px;bottom:calc(var(--kb,0px) + 10px);z-index:80;display:none;justify-content:center;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+body.log-kb .logset-float{display:flex;animation:rise .2s ease both}
+body.log-kb #view-logger{padding-bottom:110px}
+body.log-kb #logset-btn{visibility:hidden}
 
 /* ---------- rest timer ---------- */
 .rest{position:fixed;right:16px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:80;width:88px;height:88px;border-radius:50%;display:grid;place-items:center;background:rgba(14,11,8,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid var(--line-2);box-shadow:0 18px 44px -12px rgba(255,90,0,.6);animation:pop .5s var(--spring) both;color:#fbf5ec}
@@ -1174,6 +1179,7 @@ body.kb-open .dock{transform:translate(-50%,170%)}
 </main>
 
 <!-- DOCK -->
+<button id="logset-float" class="btn btn-heat btn-xl logset-float" data-act="saveSet" aria-label="Log set"><svg class="ico ico-lg"><use href="#i-check"/></svg>Log set</button>
 <nav id="dock" class="dock hidden" aria-label="Main">
   <button data-act="nav" data-to="view-landing" data-dock="home"><svg class="ico"><use href="#i-home"/></svg><span>Home</span></button>
   <button data-act="nav" data-to="view-search" data-dock="archive"><svg class="ico"><use href="#i-history"/></svg><span>Archive</span></button>
@@ -4634,7 +4640,33 @@ function reportError(err) {
     el.style.display = 'block';
     el.textContent += 'ERROR: ' + (err && err.message ? err.message : err) + '\n';
 }
+// Keep "Log set" reachable while the keyboard is up (iPhone keyboards cover
+// fixed elements, so measure the keyboard with visualViewport and sit above it).
+var _logKbTimer = null;
+function updateLogKb() {
+    var a = document.activeElement;
+    var on = currentView === 'view-logger' && a && a.matches && a.matches('input,textarea') && !!a.closest('#view-logger');
+    var vv = window.visualViewport;
+    var kb = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+    document.documentElement.style.setProperty('--kb', kb + 'px');
+    clearTimeout(_logKbTimer);
+    if (on) document.body.classList.add('log-kb');
+    else _logKbTimer = setTimeout(function () { document.body.classList.remove('log-kb'); }, 250);
+}
+function initLogKb() {
+    document.addEventListener('focusin', updateLogKb);
+    document.addEventListener('focusout', function () { setTimeout(updateLogKb, 0); });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateLogKb);
+        window.visualViewport.addEventListener('scroll', updateLogKb);
+    }
+    // Tapping the button must not close the keyboard first (that would move the button mid-tap)
+    var b = byId('logset-float');
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('pointerdown', function (e) { if (e.pointerType === 'mouse') e.preventDefault(); });
+}
 function initInputs() {
+    initLogKb();
     var sets = byId('log-sets'), reps = byId('log-reps'), wt = byId('log-weight'), notes = byId('log-notes');
     sets.addEventListener('keydown', function (e) { advanceOnEnter(e, 'log-reps'); });
     reps.addEventListener('keydown', function (e) { advanceOnEnter(e, 'log-weight'); });
