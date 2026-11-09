@@ -352,6 +352,7 @@ body.light .hero::before{background:radial-gradient(50% 50% at 50% 70%,rgba(255,
 .calc-text b{display:block;font-family:var(--f-display);font-size:1.25rem;color:var(--text);font-weight:800}
 .logset{margin-top:14px}
 .logset.pulse{animation:thump .35s ease}
+.chat-condensed{margin:14px 0;text-align:center;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
 /* While typing in the logger, a Log set button rides just above the keyboard */
 .logset-float{position:fixed;left:12px;right:12px;bottom:calc(var(--kb,0px) + 10px);z-index:80;display:none;justify-content:center;box-shadow:0 12px 32px rgba(0,0,0,.5)}
 body.log-kb .logset-float{display:flex;animation:rise .2s ease both}
@@ -2693,7 +2694,11 @@ function enterView(id) {
     if (id === 'view-search') renderSearchHub();
     if (id === 'view-search-day') renderSearchDayView();
     if (id === 'view-analytics') renderAnalyticsView();
-    if (id === 'view-coach') renderCoach();
+    if (id === 'view-coach') {
+        renderCoach();
+        if (!coachBusy) { var sp = byId('chat-spacer'); if (sp) sp.remove(); }
+        if (aiChatHistory.length) requestAnimationFrame(function () { window.scrollTo(0, document.documentElement.scrollHeight); });
+    }
     if (id === 'view-coach-chats') { byId('coach-chat-search').value = ''; renderChatList(); }
     if (id === 'view-settings') populateSettings();
     if (id === 'view-settings-program') populateProgramEditor();
@@ -4176,7 +4181,8 @@ function openChat(id) {
     var box = byId('ai-chat-history'); box.innerHTML = '';
     aiChatHistory.forEach(function (m) { appendChatBubble(m.role, m.content, true); });
     renderCoach();
-    if (currentView === 'view-coach') window.scrollTo(0, chat ? document.body.scrollHeight : 0);
+    markCondensed(chat);
+    if (currentView === 'view-coach') requestAnimationFrame(function () { window.scrollTo(0, chat ? document.documentElement.scrollHeight : 0); });
 }
 function coachNew() {
     openChat(null);
@@ -4272,9 +4278,26 @@ function buildCoachSystemPrompt() {
         if (!byDate[w.date]) byDate[w.date] = { day: (w.program || '').replace(/^Log:\s*/, ''), items: [] };
         byDate[w.date].items.push(w.exercise + (sets ? ' ' + sets : '') + (w.notes ? ' [' + w.notes + ']' : ''));
     });
-    var fullLog = Object.keys(byDate).sort().map(function (d) {
+    var lines = Object.keys(byDate).sort().map(function (d) {
         return d + (byDate[d].day ? ' (' + byDate[d].day + ')' : '') + ': ' + byDate[d].items.join(' | ');
-    }).join('\n');
+    });
+    // Keep the newest days word for word; condense anything older than fits into monthly bests.
+    var LOG_BUDGET = 220000, used = 0, keepFrom = lines.length;
+    for (var li = lines.length - 1; li >= 0; li--) { used += lines[li].length + 1; if (used > LOG_BUDGET) break; keepFrom = li; }
+    var fullLog = lines.slice(keepFrom).join('\n');
+    if (keepFrom > 0) {
+        var cutoff = lines[keepFrom].slice(0, 10), months = {};
+        all.forEach(function (w) {
+            if (w.date >= cutoff || !w.sets || !w.sets.length) return;
+            var m = w.date.slice(0, 7), top = w.sets.reduce(function (b, x) { return (parseFloat(x.w) || 0) > (parseFloat(b.w) || 0) ? x : b; }, w.sets[0]);
+            months[m] = months[m] || {};
+            var cur = months[m][w.exercise];
+            if (!cur || (parseFloat(top.w) || 0) > (parseFloat(cur.w) || 0)) months[m][w.exercise] = top;
+        });
+        fullLog = '(Before ' + cutoff + ', condensed to the best set per exercise per month:)\n' +
+            Object.keys(months).sort().map(function (m) { return m + ': ' + Object.keys(months[m]).map(function (e) { return e + ' ' + months[m][e].w + 'x' + months[m][e].r; }).join(' | '); }).join('\n') +
+            '\n(From ' + cutoff + ' on, every session:)\n' + fullLog;
+    }
     var dates = Object.keys(byDate).sort();
     return 'You are the strength coach inside Big Sunny\'s Powerlifting App, coaching ' + userName + '. ' +
         'Today is ' + today + '.\n\n' +
@@ -4373,11 +4396,14 @@ function pinToTop(el) {
     var y = el.getBoundingClientRect().top + window.scrollY - topbarHeight() - 12;
     window.scrollTo({ top: Math.max(0, y), behavior: REDUCED ? 'auto' : 'smooth' });
 }
-function callClaude(messages, onDelta, onDone, onError) {
+function callClaude(messages, onDelta, onDone, onError, extraSystem) {
     var key = localStorage.getItem(AI_KEY_STORE);
     if (!key) { byId('ai-no-key').classList.remove('hidden'); onError('No API key saved.'); return; }
     // Cache the (large) training-log context so follow-up messages are cheaper
-    var body = { model: coachModel(), max_tokens: 2000, system: [{ type: 'text', text: aiSystemContext, cache_control: { type: 'ephemeral' } }], messages: messages, stream: true };
+    var system = [{ type: 'text', text: aiSystemContext, cache_control: { type: 'ephemeral' } }];
+    if (extraSystem) system.push({ type: 'text', text: extraSystem });
+    var body = { model: coachModel(), max_tokens: 2000, system: system, messages: messages, stream: true };
+    var usedTokens = 0;
     fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
@@ -4405,12 +4431,78 @@ function callClaude(messages, onDelta, onDone, onError) {
             var d = line.slice(5).trim(); if (!d || d === '[DONE]') return;
             try {
                 var ev = JSON.parse(d);
-                if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; onDelta(full); }
+                if (ev.type === 'message_start' && ev.message && ev.message.usage) { var u = ev.message.usage; usedTokens = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0); }
+                else if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; onDelta(full); }
                 else if (ev.type === 'error') errored = (ev.error && ev.error.message) || 'Stream error';
             } catch (e) {}
         });
     }
-    function finish() { if (errored && !full) onError(errored); else onDone(full || 'No response came back. Check your API key and try again.'); }
+    function finish() { if (errored && !full) onError(errored); else onDone(full || 'No response came back. Check your API key and try again.', usedTokens); }
+}
+
+// ---------- long chats ----------
+// The screen always shows the whole chat. What the coach is sent stays under its
+// limit: once a chat gets long, older turns are condensed into a running summary
+// (numbers, plans, injuries and decisions kept) and only recent turns go word for word.
+var CTX_COMPRESS_AT = 110000;   // tokens per request before older turns are condensed
+var CTX_KEEP_RECENT = 24000;    // tokens of recent turns always sent word for word
+function estTokens(str) { return Math.ceil((str || '').length / 3.2); }
+function apiMessages(chat) { return chat.messages.slice(chat.summaryUpTo || 0); }
+function chatExtraSystem(chat) {
+    return chat.summary ? '--- EARLIER IN THIS CONVERSATION (condensed summary; treat as what was said) ---\n' + chat.summary : '';
+}
+function needsCompress(chat) {
+    var est = estTokens(aiSystemContext) + estTokens(chat.summary) +
+        apiMessages(chat).reduce(function (a, m) { return a + estTokens(m.content) + 8; }, 0);
+    // The API's own count from the last reply is exact; add only what came after it.
+    var measured = (chat.lastInput || 0) ? chat.lastInput + chat.messages.slice(-2).reduce(function (a, m) { return a + estTokens(m.content); }, 0) : 0;
+    return Math.max(est, measured) > CTX_COMPRESS_AT;
+}
+function claudeOnce(system, userText, maxTokens, onDone, onError) {
+    fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': localStorage.getItem(AI_KEY_STORE) || '', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: coachModel(), max_tokens: maxTokens, system: system, messages: [{ role: 'user', content: userText }] })
+    }).then(function (res) {
+        return res.text().then(function (t) {
+            var j = null; try { j = JSON.parse(t); } catch (e) {}
+            if (!res.ok) throw new Error((j && j.error && j.error.message) || 'HTTP ' + res.status);
+            var out = ((j && j.content) || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
+            if (!out) throw new Error('Empty summary');
+            onDone(out);
+        });
+    }).catch(function (e) { onError(e && e.message ? e.message : String(e)); });
+}
+function compressChat(chat, keepTokens, done, fail) {
+    var ms = chat.messages, start = chat.summaryUpTo || 0, total = 0, cut = ms.length - 1;
+    // Walk back from the newest message, keeping whole turns; the cut lands on an athlete message.
+    for (var i = ms.length - 1; i > start; i--) {
+        total += estTokens(ms[i].content);
+        if (total > keepTokens) break;
+        if (ms[i].role === 'user') cut = i;
+    }
+    if (cut <= start) { fail('That message is too long for the coach. Try splitting it up.'); return; }
+    var transcript = ms.slice(start, cut).map(function (m) { return (m.role === 'user' ? 'ATHLETE: ' : 'COACH: ') + m.content; }).join('\n\n');
+    var text = (chat.summary ? 'SUMMARY SO FAR:\n' + chat.summary + '\n\nCONVERSATION SINCE THEN:\n' : 'CONVERSATION:\n') + transcript;
+    claudeOnce('You condense a strength-coaching conversation so the coach can continue it without the full text. ' +
+        'Write a dense summary in plain bullet points that keeps: every number (weights, sets, reps, dates, percentages, RPE), ' +
+        'every plan or program given (keep the full schedule), injuries and pain reports, decisions made, preferences the athlete stated, ' +
+        'and open questions. Merge in the earlier summary if one is given. Drop pleasantries and repetition. Do not add new advice. Under 1500 words.',
+        text, 3000, function (summary) {
+            chat.summary = summary; chat.summaryUpTo = cut; chat.lastInput = 0;
+            done();
+        }, fail);
+}
+function isTooLongError(err) { return /too long|too many tokens|maximum context|context length|context window|prompt is too|413/i.test(err || ''); }
+function markCondensed(chat) {
+    var old = byId('chat-condensed'); if (old) old.remove();
+    if (!chat || !chat.summaryUpTo) return;
+    var el = $$('#ai-chat-history .msg')[chat.summaryUpTo];
+    if (!el) return;
+    var d = document.createElement('p');
+    d.id = 'chat-condensed'; d.className = 'chat-condensed';
+    d.textContent = 'Earlier messages condensed for the coach';
+    el.parentNode.insertBefore(d, el);
 }
 function sendCoachMessage(text) {
     if (coachBusy) return;
@@ -4444,19 +4536,32 @@ function sendCoachMessage(text) {
     chatSpacer();
     sizeChatSpacer(userEl, bubble);
     pinToTop(userEl);
-    var chatId = chat.id, pending = false, latest = '';
+    var chatId = chat.id, pending = false, latest = '', retried = false;
     function stillOpen() { return coachChatId === chatId; }
-    callClaude(chat.messages, function (t) {
+    function condense(keep, then) {
+        if (stillOpen()) bubble.innerHTML = '<span class="small muted">Condensing earlier messages so the coach can keep going...</span>';
+        compressChat(chat, keep, function () {
+            putChat(chat);
+            if (stillOpen()) { markCondensed(chat); bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; }
+            then();
+        }, onFail);
+    }
+    if (needsCompress(chat)) condense(CTX_KEEP_RECENT, ask); else ask();
+    function ask() { callClaude(apiMessages(chat), function (t) {
         latest = t;
         if (pending || !stillOpen()) return; pending = true;
         requestAnimationFrame(function () { pending = false; bubble.innerHTML = renderMarkdown(latest); sizeChatSpacer(userEl, bubble); });
-    }, function (full) {
+    }, function (full, usedTokens) {
         var c = getChat(chatId);
-        if (c) { c.messages.push({ role: 'assistant', content: full }); c.updated = Date.now(); putChat(c); }
+        if (c) { c.messages.push({ role: 'assistant', content: full }); c.updated = Date.now(); c.lastInput = usedTokens || 0; putChat(c); }
         if (stillOpen()) { bubble.innerHTML = renderMarkdown(full); aiChatHistory = c ? c.messages.slice() : aiChatHistory; sizeChatSpacer(userEl, bubble); }
         coachBusy = false; byId('coach-send').disabled = false;
         Sound.play('receive');
     }, function (err) {
+        if (!retried && isTooLongError(err)) { retried = true; condense(6000, ask); return; }
+        onFail(err);
+    }, chatExtraSystem(chat)); }
+    function onFail(err) {
         // Take the unanswered message back out so the chat stays clean, and put it back in the box to retry
         var c = getChat(chatId);
         if (c) {
@@ -4473,7 +4578,7 @@ function sendCoachMessage(text) {
         }
         coachBusy = false; byId('coach-send').disabled = false;
         Sound.play('error');
-    });
+    }
 }
 function autoGrow(t) { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; }
 
