@@ -3817,27 +3817,37 @@ function doDeleteExercise(m, idx) {
 
 // ---------- export / import ----------
 function exportData() {
-    var data = getAllWorkouts();
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var data = getAllWorkouts(), chats = loadChats();
+    var blob = new Blob([JSON.stringify({ app: 'bigsunny', version: 2, workouts: data, coachChats: chats })], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a'); a.href = url;
     a.download = 'bigsunny-backup-' + todayStr() + '.json';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
     Sound.play('success');
-    toast('Backup downloaded (' + data.length + ' entries).', 'good', 'download');
+    toast('Backup downloaded (' + data.length + ' entries' + (chats.length ? ', ' + chats.length + ' coach chat' + (chats.length === 1 ? '' : 's') : '') + ').', 'good', 'download');
 }
 function importData(event) {
     var file = event.target.files[0]; if (!file) return;
     var reader = new FileReader();
     reader.onload = function (e) {
         try {
-            var data = JSON.parse(e.target.result);
-            if (!Array.isArray(data)) throw new Error('invalid');
+            var parsed = JSON.parse(e.target.result);
+            // Old backups are a plain list of workouts; new ones also carry coach chats.
+            var data = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.workouts) ? parsed.workouts : null);
+            if (!data) throw new Error('invalid');
             saveWorkouts(data); localStorage.setItem(VERSION_KEY, ARCHIVE_VERSION);
             ensureIds();
+            var nChats = 0;
+            if (parsed && Array.isArray(parsed.coachChats) && parsed.coachChats.length) {
+                var have = loadChats(), byId2 = {};
+                have.forEach(function (c) { byId2[c.id] = c; });
+                parsed.coachChats.forEach(function (c) { if (c && c.id && Array.isArray(c.messages)) { byId2[c.id] = c; nChats++; } });
+                saveChats(Object.keys(byId2).map(function (k) { return byId2[k]; }));
+                if (coachChatId && getChat(coachChatId)) openChat(coachChatId);
+            }
             Sound.play('success');
-            toast('Imported ' + data.length + ' entries.', 'good', 'upload');
+            toast('Imported ' + data.length + ' entries' + (nChats ? ' and ' + nChats + ' coach chat' + (nChats === 1 ? '' : 's') : '') + '.', 'good', 'upload');
             renderLandingBanner();
         } catch (err) { Sound.play('error'); toast("Import failed. That file isn't a Big Sunny's backup.", 'bad'); }
     };
@@ -4152,12 +4162,62 @@ var SUGGESTIONS = [
 ];
 
 // ---------- chat storage ----------
+// Chats live in the browser's database (IndexedDB), which has room for years of
+// conversation; the small 5 MB storage stays free for workouts. Falls back to
+// that small storage only if the database isn't available (e.g. private browsing).
+var _chatsJSON = '[]', _chatsReady = false, _chatDB = null;
+function initChatStore(done) {
+    var ls = null;
+    try { ls = localStorage.getItem(COACH_CHATS_KEY); } catch (e) {}
+    _chatsJSON = ls || '[]';
+    var finished = false;
+    function finish() { if (finished) return; finished = true; _chatsReady = true; done(); }
+    setTimeout(finish, 2500);  // never block the app on a slow database
+    try {
+        if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+        var req = indexedDB.open('bigsunny', 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
+        req.onerror = finish;
+        req.onsuccess = function () {
+            var db = req.result;
+            try {
+                var g = db.transaction('kv', 'readonly').objectStore('kv').get('chats');
+                g.onsuccess = function () {
+                    if (finished) return;
+                    _chatDB = db;
+                    if (ls) {
+                        // first run after the upgrade: move chats out of the small storage
+                        idbPutChats(ls, function (ok) { if (ok) { try { localStorage.removeItem(COACH_CHATS_KEY); } catch (e) {} } });
+                    } else if (typeof g.result === 'string') {
+                        _chatsJSON = g.result;
+                    }
+                    finish();
+                };
+                g.onerror = finish;
+            } catch (e) { finish(); }
+        };
+    } catch (e) { finish(); }
+}
+function idbPutChats(json, cb) {
+    try {
+        var tx = _chatDB.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(json, 'chats');
+        tx.oncomplete = function () { cb && cb(true); };
+        tx.onerror = tx.onabort = function () { cb && cb(false); };
+    } catch (e) { cb && cb(false); }
+}
 function loadChats() {
-    try { var c = JSON.parse(localStorage.getItem(COACH_CHATS_KEY) || '[]'); return Array.isArray(c) ? c : []; } catch (e) { return []; }
+    try { var c = JSON.parse(_chatsJSON || '[]'); return Array.isArray(c) ? c : []; } catch (e) { return []; }
 }
 function saveChats(chats) {
-    try { localStorage.setItem(COACH_CHATS_KEY, JSON.stringify(chats)); return true; }
-    catch (e) { toast('Could not save the chat. Phone storage is full. Delete some old chats.', 'bad'); return false; }
+    var json = JSON.stringify(chats);
+    _chatsJSON = json;
+    if (_chatDB) {
+        idbPutChats(json, function (ok) { if (!ok) toast('Could not save the chat. Phone storage is full.', 'bad'); });
+        return true;
+    }
+    try { localStorage.setItem(COACH_CHATS_KEY, json); return true; }
+    catch (e) { toast('Could not save the chat. Phone storage is full.', 'bad'); return false; }
 }
 function getChat(id) { var c = loadChats(); for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i]; return null; }
 function putChat(chat) {
@@ -4307,7 +4367,8 @@ function buildCoachSystemPrompt() {
         '3. When there is an injury in the notes, be conservative: progress one variable at a time, about 5% per week at most on the main lifts, and prefer adding load slowly over adding new exercises.\n' +
         '4. If the athlete reports pain above 3/10 during a lift, or pain that does not settle within 24 hours, tell them to back off the load and check with their clinician. Do not diagnose.\n' +
         '5. Be honest about uncertainty. If the log is missing sessions or the data does not support a conclusion, say so rather than guessing. Rep-max estimates are rough; say so when you use them.\n' +
-        '6. Be direct and concise. Plain language, complete sentences. Dry humor is welcome. Use short numbered lists for session plans.\n\n' +
+        '6. Be direct and concise. Plain language, complete sentences. Dry humor is welcome. Use short numbered lists for session plans.\n' +
+        '7. This is usually one ongoing conversation that spans weeks or months, like a real coach who remembers everything. Each athlete message starts with the date it was sent. The training log below is current as of today, so check it for sessions logged since you last spoke, and follow up on earlier plans and open threads when relevant.\n\n' +
         '--- HOW TO READ THE LOG ---\n' +
         'Format: date (program day): Exercise SETSxREPS@WEIGHT [notes]. Example: "3x5@235" means 3 sets of 5 reps at 235 ' + ul + '.\n' +
         'Quirks: For machines and cable exercises the weight is usually a pin or plate-stack number, not ' + ul + '. ' +
@@ -4445,11 +4506,17 @@ function callClaude(messages, onDelta, onDone, onError, extraSystem) {
 // limit: once a chat gets long, older turns are condensed into a running summary
 // (numbers, plans, injuries and decisions kept) and only recent turns go word for word.
 var CTX_COMPRESS_AT = 110000;   // tokens per request before older turns are condensed
-var CTX_KEEP_RECENT = 24000;    // tokens of recent turns always sent word for word
+var CTX_KEEP_RECENT = 30000;    // tokens of recent turns always sent word for word
 function estTokens(str) { return Math.ceil((str || '').length / 3.2); }
-function apiMessages(chat) { return chat.messages.slice(chat.summaryUpTo || 0); }
+function msgDate(m) { return m.at ? new Date(m.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+// What the API receives: role and text only, with the date in front of the athlete's messages.
+function apiMessages(chat) {
+    return chat.messages.slice(chat.summaryUpTo || 0).map(function (m) {
+        return { role: m.role, content: (m.role === 'user' && m.at ? '[' + msgDate(m) + '] ' : '') + m.content };
+    });
+}
 function chatExtraSystem(chat) {
-    return chat.summary ? '--- EARLIER IN THIS CONVERSATION (condensed summary; treat as what was said) ---\n' + chat.summary : '';
+    return chat.summary ? '--- COACHING FILE: everything earlier in this conversation, condensed (treat as what was said) ---\n' + chat.summary : '';
 }
 function needsCompress(chat) {
     var est = estTokens(aiSystemContext) + estTokens(chat.summary) +
@@ -4482,13 +4549,19 @@ function compressChat(chat, keepTokens, done, fail) {
         if (ms[i].role === 'user') cut = i;
     }
     if (cut <= start) { fail('That message is too long for the coach. Try splitting it up.'); return; }
-    var transcript = ms.slice(start, cut).map(function (m) { return (m.role === 'user' ? 'ATHLETE: ' : 'COACH: ') + m.content; }).join('\n\n');
+    var transcript = ms.slice(start, cut).map(function (m) { return (m.at ? '[' + msgDate(m) + '] ' : '') + (m.role === 'user' ? 'ATHLETE: ' : 'COACH: ') + m.content; }).join('\n\n');
     var text = (chat.summary ? 'SUMMARY SO FAR:\n' + chat.summary + '\n\nCONVERSATION SINCE THEN:\n' : 'CONVERSATION:\n') + transcript;
-    claudeOnce('You condense a strength-coaching conversation so the coach can continue it without the full text. ' +
-        'Write a dense summary in plain bullet points that keeps: every number (weights, sets, reps, dates, percentages, RPE), ' +
-        'every plan or program given (keep the full schedule), injuries and pain reports, decisions made, preferences the athlete stated, ' +
-        'and open questions. Merge in the earlier summary if one is given. Drop pleasantries and repetition. Do not add new advice. Under 1500 words.',
-        text, 3000, function (summary) {
+    claudeOnce('You keep the coaching file for one long-running strength-coaching conversation that spans months. ' +
+        'The coach will continue the conversation from this file plus the most recent messages, so nothing important may be lost. ' +
+        'Merge the existing file (if given) with the new conversation and rewrite the whole file. Use these sections, as plain bullet points:\n' +
+        '1. GOALS AND CONTEXT: what the athlete is training for, meets, deadlines, schedule, equipment, preferences.\n' +
+        '2. INJURIES AND CONSTRAINTS: every injury, pain report and clinician instruction, with dates and current status.\n' +
+        '3. CURRENT PLAN: the program in effect now, in full (days, exercises, sets, reps, loads, progression rules).\n' +
+        '4. DECISIONS AND AGREEMENTS: what was decided and why, dated.\n' +
+        '5. TIMELINE: dated one-line entries of notable sessions, check-ins, changes and advice. Keep older entries but compress them more.\n' +
+        '6. OPEN THREADS: questions or follow-ups still pending.\n' +
+        'Keep exact numbers and dates. Drop pleasantries and repetition. Replace superseded plans instead of keeping both. Do not add new advice. Stay under 2500 words.',
+        text, 5000, function (summary) {
             chat.summary = summary; chat.summaryUpTo = cut; chat.lastInput = 0;
             done();
         }, fail);
@@ -4506,6 +4579,7 @@ function markCondensed(chat) {
 }
 function sendCoachMessage(text) {
     if (coachBusy) return;
+    if (!_chatsReady) { setTimeout(function () { sendCoachMessage(text); }, 200); return; }
     var input = byId('ai-chat-input');
     var msg = (text || input.value).trim();
     if (!msg) return;
@@ -4518,13 +4592,13 @@ function sendCoachMessage(text) {
         chat = { id: genId(), title: chatTitleFrom(msg), created: Date.now(), updated: Date.now(), model: coachModel(), messages: [] };
         setCurrentChat(chat.id);
     }
-    chat.messages.push({ role: 'user', content: msg });
+    chat.messages.push({ role: 'user', content: msg, at: Date.now() });
     chat.updated = Date.now();
     putChat(chat);
     aiChatHistory = chat.messages.slice();
     byId('coach-title').textContent = chat.title;
 
-    if (aiSystemContextChat !== chat.id || !aiSystemContext) { aiSystemContext = buildCoachSystemPrompt(); aiSystemContextChat = chat.id; }
+    aiSystemContext = buildCoachSystemPrompt(); aiSystemContextChat = chat.id;
     byId('coach-suggest').classList.add('hidden');
     var userEl = appendChatBubble('user', msg, true);
     Sound.play('send');
@@ -4553,7 +4627,7 @@ function sendCoachMessage(text) {
         requestAnimationFrame(function () { pending = false; bubble.innerHTML = renderMarkdown(latest); sizeChatSpacer(userEl, bubble); });
     }, function (full, usedTokens) {
         var c = getChat(chatId);
-        if (c) { c.messages.push({ role: 'assistant', content: full }); c.updated = Date.now(); c.lastInput = usedTokens || 0; putChat(c); }
+        if (c) { c.messages.push({ role: 'assistant', content: full, at: Date.now() }); c.updated = Date.now(); c.lastInput = usedTokens || 0; putChat(c); }
         if (stillOpen()) { bubble.innerHTML = renderMarkdown(full); aiChatHistory = c ? c.messages.slice() : aiChatHistory; sizeChatSpacer(userEl, bubble); }
         coachBusy = false; byId('coach-send').disabled = false;
         Sound.play('receive');
@@ -4828,7 +4902,9 @@ function boot() {
         Chart.defaults.color = '#aa9d8e';
     }
     initDispatcher(); initTouchFX(); initSteppers(); initLongPress(); initInputs(); initScrollShadows();
-    try { var lastChat = localStorage.getItem(COACH_CURRENT_KEY); if (lastChat && getChat(lastChat)) openChat(lastChat); } catch (e) {}
+    initChatStore(function () {
+        try { var lastChat = localStorage.getItem(COACH_CURRENT_KEY); if (lastChat && getChat(lastChat)) openChat(lastChat); } catch (e) {}
+    });
     document.addEventListener('pointerdown', function once() { Sound.unlock(); document.removeEventListener('pointerdown', once); }, { passive: true });
     injectLifters(document);
 
