@@ -4166,37 +4166,69 @@ var SUGGESTIONS = [
 // conversation; the small 5 MB storage stays free for workouts. Falls back to
 // that small storage only if the database isn't available (e.g. private browsing).
 var _chatsJSON = '[]', _chatsReady = false, _chatDB = null;
+var LS_CHAT_COPY_MAX = 1500000;   // keep a second copy in the small storage while it's small enough
+function parseChatList(json) { try { var c = JSON.parse(json || '[]'); return Array.isArray(c) ? c : []; } catch (e) { return []; } }
+// Union of two chat lists. For the same chat, the copy with more messages wins, so
+// one store can never shrink or erase what the other one holds.
+function mergeChatLists(a, b) {
+    var map = {};
+    function add(list) {
+        list.forEach(function (c) {
+            if (!c || !c.id || !Array.isArray(c.messages)) return;
+            var o = map[c.id];
+            if (!o || c.messages.length > o.messages.length ||
+                (c.messages.length === o.messages.length && (c.updated || 0) > (o.updated || 0))) map[c.id] = c;
+        });
+    }
+    add(a); add(b);
+    return Object.keys(map).map(function (k) { return map[k]; });
+}
+function mostRecentChatId() {
+    var best = null;
+    loadChats().forEach(function (c) { if (!best || (c.updated || 0) > (best.updated || 0)) best = c; });
+    return best ? best.id : null;
+}
+function openLastChat() {
+    var last = null;
+    try { last = localStorage.getItem(COACH_CURRENT_KEY); } catch (e) {}
+    if (!last || !getChat(last)) last = mostRecentChatId();
+    if (last) openChat(last);
+}
 function initChatStore(done) {
     var ls = null;
     try { ls = localStorage.getItem(COACH_CHATS_KEY); } catch (e) {}
     _chatsJSON = ls || '[]';
-    var finished = false;
-    function finish() { if (finished) return; finished = true; _chatsReady = true; done(); }
-    setTimeout(finish, 2500);  // never block the app on a slow database
+    var called = false;
+    function ready() { if (called) return; called = true; _chatsReady = true; done(); }
+    setTimeout(ready, 3000);  // don't hold the app hostage to a slow database...
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
     try {
-        if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
         var req = indexedDB.open('bigsunny', 1);
         req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
-        req.onerror = finish;
+        req.onerror = ready;
         req.onsuccess = function () {
             var db = req.result;
             try {
                 var g = db.transaction('kv', 'readonly').objectStore('kv').get('chats');
                 g.onsuccess = function () {
-                    if (finished) return;
+                    // ...but whenever it answers, even late, merge what it holds with what we have.
+                    var stored = parseChatList(typeof g.result === 'string' ? g.result : '[]');
+                    var merged = mergeChatLists(stored, loadChats());
                     _chatDB = db;
-                    if (ls) {
-                        // first run after the upgrade: move chats out of the small storage
-                        idbPutChats(ls, function (ok) { if (ok) { try { localStorage.removeItem(COACH_CHATS_KEY); } catch (e) {} } });
-                    } else if (typeof g.result === 'string') {
-                        _chatsJSON = g.result;
+                    _chatsJSON = JSON.stringify(merged);
+                    idbPutChats(_chatsJSON);
+                    writeLsChatCopy(_chatsJSON);
+                    if (called && !coachBusy) {
+                        // arrived late: show what was recovered
+                        if (!coachChatId || !getChat(coachChatId) || getChat(coachChatId).messages.length === 0) openLastChat();
+                        else if (currentView === 'view-coach-chats') renderChatList();
                     }
-                    finish();
+                    ready();
                 };
-                g.onerror = finish;
-            } catch (e) { finish(); }
+                g.onerror = ready;
+            } catch (e) { ready(); }
         };
-    } catch (e) { finish(); }
+    } catch (e) { ready(); }
 }
 function idbPutChats(json, cb) {
     try {
@@ -4206,18 +4238,22 @@ function idbPutChats(json, cb) {
         tx.onerror = tx.onabort = function () { cb && cb(false); };
     } catch (e) { cb && cb(false); }
 }
-function loadChats() {
-    try { var c = JSON.parse(_chatsJSON || '[]'); return Array.isArray(c) ? c : []; } catch (e) { return []; }
+function loadChats() { return parseChatList(_chatsJSON); }
+// Second copy in the small storage while it fits, so one store failing never loses a chat.
+// Past the size cap it steps aside so workouts never run out of room.
+function writeLsChatCopy(json) {
+    try {
+        if (json.length <= LS_CHAT_COPY_MAX) { localStorage.setItem(COACH_CHATS_KEY, json); return true; }
+        localStorage.removeItem(COACH_CHATS_KEY); return false;
+    } catch (e) { try { localStorage.removeItem(COACH_CHATS_KEY); } catch (e2) {} return false; }
 }
 function saveChats(chats) {
     var json = JSON.stringify(chats);
     _chatsJSON = json;
-    if (_chatDB) {
-        idbPutChats(json, function (ok) { if (!ok) toast('Could not save the chat. Phone storage is full.', 'bad'); });
-        return true;
-    }
-    try { localStorage.setItem(COACH_CHATS_KEY, json); return true; }
-    catch (e) { toast('Could not save the chat. Phone storage is full.', 'bad'); return false; }
+    var ok = true;
+    if (_chatDB) idbPutChats(json, function (good) { if (!good) toast('Could not save the chat. Phone storage is full.', 'bad'); });
+    if (!writeLsChatCopy(json) && !_chatDB) { ok = false; toast('Could not save the chat. Phone storage is full.', 'bad'); }
+    return ok;
 }
 function getChat(id) { var c = loadChats(); for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i]; return null; }
 function putChat(chat) {
@@ -4902,9 +4938,7 @@ function boot() {
         Chart.defaults.color = '#aa9d8e';
     }
     initDispatcher(); initTouchFX(); initSteppers(); initLongPress(); initInputs(); initScrollShadows();
-    initChatStore(function () {
-        try { var lastChat = localStorage.getItem(COACH_CURRENT_KEY); if (lastChat && getChat(lastChat)) openChat(lastChat); } catch (e) {}
-    });
+    initChatStore(function () { if (!coachChatId) openLastChat(); });
     document.addEventListener('pointerdown', function once() { Sound.unlock(); document.removeEventListener('pointerdown', once); }, { passive: true });
     injectLifters(document);
 
