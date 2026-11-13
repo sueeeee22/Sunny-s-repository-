@@ -1118,6 +1118,9 @@ body.kb-open .dock{transform:translate(-50%,170%)}
       <textarea id="coach-notes-field" class="input" rows="7" style="font-size:.92rem;resize:vertical" placeholder="e.g. Left QL strain. PT: suitcase carries + trunk rotation 3x/week. Squat to box at parallel. Moderate brace..."></textarea>
       <div class="between mt-12"><span id="coach-notes-saved-msg" class="hidden"></span><button class="btn btn-line btn-sm" style="margin-left:auto" data-act="saveCoachNotes"><svg class="ico ico-sm"><use href="#i-check"/></svg>Save notes</button></div>
     </div>
+    <div class="list mt-12">
+      <button class="list-row" data-act="openChatStorage"><div><p class="lr-t">Chat storage and backups</p><p class="lr-s">See what's saved and restore a daily backup</p></div><svg class="ico"><use href="#i-chev"/></svg></button>
+    </div>
   </div>
 
   <div class="group">
@@ -3842,7 +3845,8 @@ function importData(event) {
             if (parsed && Array.isArray(parsed.coachChats) && parsed.coachChats.length) {
                 var have = loadChats(), byId2 = {};
                 have.forEach(function (c) { byId2[c.id] = c; });
-                parsed.coachChats.forEach(function (c) { if (c && c.id && Array.isArray(c.messages)) { byId2[c.id] = c; nChats++; } });
+                parsed.coachChats.forEach(function (c) { if (c && c.id && Array.isArray(c.messages)) { delete _tomb[c.id]; byId2[c.id] = byId2[c.id] ? mergeChat(byId2[c.id], c) : c; nChats++; } });
+                saveTomb();
                 saveChats(Object.keys(byId2).map(function (k) { return byId2[k]; }));
                 if (coachChatId && getChat(coachChatId)) openChat(coachChatId);
             }
@@ -4162,27 +4166,59 @@ var SUGGESTIONS = [
 ];
 
 // ---------- chat storage ----------
-// Chats live in the browser's database (IndexedDB), which has room for years of
-// conversation; the small 5 MB storage stays free for workouts. Falls back to
-// that small storage only if the database isn't available (e.g. private browsing).
-var _chatsJSON = '[]', _chatsReady = false, _chatDB = null;
-var LS_CHAT_COPY_MAX = 1500000;   // keep a second copy in the small storage while it's small enough
+// Rules this layer is built on, so a chat can never silently disappear:
+//  1. Nothing overwrites. Every write first reads what is stored and MERGES into it,
+//     chat by chat and message by message. A stale tab, a slow start or a second copy
+//     of the app can only ever add messages, never drop them.
+//  2. Chats are only removed by an explicit Delete (recorded so merges don't revive them).
+//  3. A dated snapshot of all chats is kept for the last 14 days and can be restored
+//     from Settings > Coach > Chat storage and backups.
+//  4. The main copy is in the browser database (IndexedDB, room for years). A second
+//     copy stays in the small storage while chats are under 1.5 MB.
+var APP_BUILD = '2026-11-13.3';
+var _chatsJSON = '[]', _chatsReady = false, _chatDB = null, _chatLoad = 'loading', _tomb = {};
+var LS_CHAT_COPY_MAX = 1500000, SNAP_KEEP = 14, CHAT_TOMB_KEY = 'bigsunny_coach_deleted';
 function parseChatList(json) { try { var c = JSON.parse(json || '[]'); return Array.isArray(c) ? c : []; } catch (e) { return []; } }
-// Union of two chat lists. For the same chat, the copy with more messages wins, so
-// one store can never shrink or erase what the other one holds.
-function mergeChatLists(a, b) {
-    var map = {};
-    function add(list) {
-        list.forEach(function (c) {
-            if (!c || !c.id || !Array.isArray(c.messages)) return;
-            var o = map[c.id];
-            if (!o || c.messages.length > o.messages.length ||
-                (c.messages.length === o.messages.length && (c.updated || 0) > (o.updated || 0))) map[c.id] = c;
-        });
-    }
-    add(a); add(b);
-    return Object.keys(map).map(function (k) { return map[k]; });
+function msgKey(m) { var t = m.content || ''; return (m.at || 0) + '|' + m.role + '|' + t.length + '|' + t.slice(0, 80); }
+function mergeMessages(a, b) {
+    var longer = a.length >= b.length ? a : b, shorter = longer === a ? b : a, seen = {};
+    longer.forEach(function (m) { seen[msgKey(m)] = 1; });
+    var extra = shorter.filter(function (m) { return !seen[msgKey(m)]; });
+    if (!extra.length) return longer;
+    var out = longer.concat(extra);
+    if (out.every(function (m) { return m.at; })) out.sort(function (x, y) { return x.at - y.at; });
+    return out;
 }
+// `mine` is this tab's copy, `stored` is what is on disk. Details (title, summary) come
+// from mine unless the stored copy has more messages; messages are the union of both.
+function mergeChat(stored, mine) {
+    var base = mine.messages.length >= stored.messages.length ? mine : stored;
+    var msgs = mergeMessages(stored.messages, mine.messages);
+    var out = {}; for (var k in base) out[k] = base[k];
+    out.messages = msgs;
+    out.updated = Math.max(stored.updated || 0, mine.updated || 0);
+    if (msgs !== base.messages) {
+        // messages were combined from both sides: keep the summary only if what it covers is unchanged
+        var n = out.summaryUpTo || 0, same = true;
+        for (var i = 0; i < n; i++) if (!msgs[i] || !base.messages[i] || msgKey(msgs[i]) !== msgKey(base.messages[i])) { same = false; break; }
+        if (!same) { out.summary = ''; out.summaryUpTo = 0; }
+        out.lastInput = 0;
+    }
+    return out;
+}
+function mergeChatLists(stored, mine) {
+    var map = {}, order = [];
+    function ok(c) { return c && c.id && Array.isArray(c.messages) && !_tomb[c.id]; }
+    stored.forEach(function (c) { if (ok(c)) { map[c.id] = c; order.push(c.id); } });
+    mine.forEach(function (c) {
+        if (!ok(c)) return;
+        if (map[c.id]) map[c.id] = mergeChat(map[c.id], c); else { map[c.id] = c; order.push(c.id); }
+    });
+    return order.map(function (id) { return map[id]; });
+}
+function countMsgs(list) { return list.reduce(function (a, c) { return a + (c.messages ? c.messages.length : 0); }, 0); }
+function loadTomb() { try { var t = JSON.parse(localStorage.getItem(CHAT_TOMB_KEY) || '{}'); _tomb = t && typeof t === 'object' ? t : {}; } catch (e) { _tomb = {}; } }
+function saveTomb() { try { localStorage.setItem(CHAT_TOMB_KEY, JSON.stringify(_tomb)); } catch (e) {} }
 function mostRecentChatId() {
     var best = null;
     loadChats().forEach(function (c) { if (!best || (c.updated || 0) > (best.updated || 0)) best = c; });
@@ -4192,68 +4228,203 @@ function openLastChat() {
     var last = null;
     try { last = localStorage.getItem(COACH_CURRENT_KEY); } catch (e) {}
     if (!last || !getChat(last)) last = mostRecentChatId();
-    if (last) openChat(last);
+    if (last) openChat(last); else renderCoach();
+}
+// Re-read the database and fold it into what this tab has. Safe to call any time.
+function syncChatsFromDB(done) {
+    if (!_chatDB) { done && done(false); return; }
+    try {
+        var g = _chatDB.transaction('kv', 'readonly').objectStore('kv').get('chats');
+        g.onsuccess = function () {
+            var before = _chatsJSON;
+            var merged = mergeChatLists(parseChatList(typeof g.result === 'string' ? g.result : '[]'), loadChats());
+            _chatsJSON = JSON.stringify(merged);
+            done && done(_chatsJSON !== before);
+        };
+        g.onerror = function () { done && done(false); };
+    } catch (e) { done && done(false); }
+}
+function refreshCoachUI() {
+    if (coachBusy) return;
+    if (currentView === 'view-coach-chats') renderChatList();
+    var open = coachChatId ? getChat(coachChatId) : null;
+    if (!open || !open.messages.length) openLastChat();
+    else if (open.messages.length !== aiChatHistory.length) openChat(coachChatId);
 }
 function initChatStore(done) {
+    loadTomb();
     var ls = null;
     try { ls = localStorage.getItem(COACH_CHATS_KEY); } catch (e) {}
-    _chatsJSON = ls || '[]';
-    var called = false;
-    function ready() { if (called) return; called = true; _chatsReady = true; done(); }
-    setTimeout(ready, 3000);  // don't hold the app hostage to a slow database...
+    _chatsJSON = JSON.stringify(mergeChatLists([], parseChatList(ls)));
+    var called = false, opened = false;
+    function ready(state) {
+        if (state) _chatLoad = state;
+        if (called) return; called = true; _chatsReady = true; done();
+    }
+    function tryOpen() {
+        if (opened) return;
+        try {
+            var req = indexedDB.open('bigsunny', 1);
+            req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
+            req.onerror = function () { ready('fallback'); };
+            req.onsuccess = function () {
+                if (opened) { try { req.result.close(); } catch (e) {} return; }
+                opened = true; _chatDB = req.result;
+                var late = called;
+                syncChatsFromDB(function () {
+                    _chatLoad = 'db';
+                    persistChats();             // store the union back, take today's snapshot
+                    ready('db');
+                    if (late) refreshCoachUI(); // database answered after we stopped waiting
+                });
+            };
+        } catch (e) { ready('fallback'); }
+    }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
-    try {
-        var req = indexedDB.open('bigsunny', 1);
-        req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
-        req.onerror = ready;
-        req.onsuccess = function () {
-            var db = req.result;
-            try {
-                var g = db.transaction('kv', 'readonly').objectStore('kv').get('chats');
-                g.onsuccess = function () {
-                    // ...but whenever it answers, even late, merge what it holds with what we have.
-                    var stored = parseChatList(typeof g.result === 'string' ? g.result : '[]');
-                    var merged = mergeChatLists(stored, loadChats());
-                    _chatDB = db;
-                    _chatsJSON = JSON.stringify(merged);
-                    idbPutChats(_chatsJSON);
-                    writeLsChatCopy(_chatsJSON);
-                    if (called && !coachBusy) {
-                        // arrived late: show what was recovered
-                        if (!coachChatId || !getChat(coachChatId) || getChat(coachChatId).messages.length === 0) openLastChat();
-                        else if (currentView === 'view-coach-chats') renderChatList();
-                    }
-                    ready();
-                };
-                g.onerror = ready;
-            } catch (e) { ready(); }
-        };
-    } catch (e) { ready(); }
+    tryOpen();
+    setTimeout(tryOpen, 4000);   // some browsers stall the first open; ask again
+    // After 8 s carry on with the second copy. Nothing is lost: when the database
+    // does answer, both sides are merged.
+    setTimeout(function () { ready(_chatDB ? null : 'fallback'); }, 8000);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && _chatDB) syncChatsFromDB(function (changed) { if (changed) refreshCoachUI(); });
+    });
 }
-function idbPutChats(json, cb) {
+// Write this tab's chats to disk by merging into whatever is stored there.
+function persistChats(cb) {
+    var mine = loadChats();
+    writeLsChatCopy(mine);
+    if (!_chatDB) { cb && cb(true); return; }
     try {
-        var tx = _chatDB.transaction('kv', 'readwrite');
-        tx.objectStore('kv').put(json, 'chats');
-        tx.oncomplete = function () { cb && cb(true); };
-        tx.onerror = tx.onabort = function () { cb && cb(false); };
+        var tx = _chatDB.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), result = null;
+        var g = st.get('chats');
+        g.onsuccess = function () {
+            var storedJSON = typeof g.result === 'string' ? g.result : '[]';
+            var merged = mergeChatLists(parseChatList(storedJSON), mine);
+            result = JSON.stringify(merged);
+            st.put(result, 'chats');
+            // one snapshot per day of what was stored before today's first write
+            var snapKey = 'snap:' + todayStr();
+            var sg = st.get(snapKey);
+            sg.onsuccess = function () {
+                if (sg.result === undefined && storedJSON !== '[]') st.put(storedJSON, snapKey);
+                var kr = st.getAllKeys();
+                kr.onsuccess = function () {
+                    var snaps = kr.result.filter(function (k) { return String(k).indexOf('snap:') === 0; }).sort();
+                    snaps.slice(0, Math.max(0, snaps.length - SNAP_KEEP)).forEach(function (k) { st.delete(k); });
+                };
+            };
+        };
+        tx.oncomplete = function () {
+            if (result && countMsgs(parseChatList(result)) > countMsgs(loadChats())) {
+                _chatsJSON = result;    // disk had messages this tab didn't know about
+                refreshCoachUI();
+            }
+            cb && cb(true);
+        };
+        tx.onerror = tx.onabort = function () { toast('Could not save the chat. Phone storage is full.', 'bad'); cb && cb(false); };
     } catch (e) { cb && cb(false); }
 }
 function loadChats() { return parseChatList(_chatsJSON); }
-// Second copy in the small storage while it fits, so one store failing never loses a chat.
-// Past the size cap it steps aside so workouts never run out of room.
-function writeLsChatCopy(json) {
+// Second copy in the small storage while it fits (merged, like every write). Past the
+// size cap it steps aside so workouts never run out of room.
+function writeLsChatCopy(mine) {
     try {
+        var merged = mergeChatLists(parseChatList(localStorage.getItem(COACH_CHATS_KEY)), mine);
+        var json = JSON.stringify(merged);
         if (json.length <= LS_CHAT_COPY_MAX) { localStorage.setItem(COACH_CHATS_KEY, json); return true; }
         localStorage.removeItem(COACH_CHATS_KEY); return false;
     } catch (e) { try { localStorage.removeItem(COACH_CHATS_KEY); } catch (e2) {} return false; }
 }
 function saveChats(chats) {
-    var json = JSON.stringify(chats);
-    _chatsJSON = json;
-    var ok = true;
-    if (_chatDB) idbPutChats(json, function (good) { if (!good) toast('Could not save the chat. Phone storage is full.', 'bad'); });
-    if (!writeLsChatCopy(json) && !_chatDB) { ok = false; toast('Could not save the chat. Phone storage is full.', 'bad'); }
-    return ok;
+    _chatsJSON = JSON.stringify(chats.filter(function (c) { return c && c.id && !_tomb[c.id]; }));
+    persistChats();
+    return true;
+}
+// The only way a chat is ever removed.
+function removeChat(id) {
+    _tomb[id] = Date.now(); saveTomb();
+    _chatsJSON = JSON.stringify(loadChats().filter(function (c) { return c.id !== id; }));
+    try {
+        var kept = parseChatList(localStorage.getItem(COACH_CHATS_KEY)).filter(function (c) { return c.id !== id; });
+        localStorage.setItem(COACH_CHATS_KEY, JSON.stringify(kept));
+    } catch (e) {}
+    if (_chatDB) {
+        try {
+            var tx = _chatDB.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), g = st.get('chats');
+            g.onsuccess = function () {
+                var left = parseChatList(typeof g.result === 'string' ? g.result : '[]').filter(function (c) { return c.id !== id; });
+                st.put(JSON.stringify(mergeChatLists(left, loadChats())), 'chats');
+            };
+        } catch (e) {}
+    }
+}
+// ---------- Settings > Coach > Chat storage and backups ----------
+function chatStorageReport(done) {
+    var rep = { build: APP_BUILD, mode: _chatLoad, now: loadChats(), db: null, copy: [], snaps: [] };
+    try { rep.copy = parseChatList(localStorage.getItem(COACH_CHATS_KEY)); } catch (e) {}
+    if (!_chatDB) { done(rep); return; }
+    try {
+        var st = _chatDB.transaction('kv', 'readonly').objectStore('kv'), kr = st.getAllKeys();
+        kr.onsuccess = function () {
+            var keys = kr.result.map(String), left = keys.length;
+            if (!left) { rep.db = []; done(rep); return; }
+            keys.forEach(function (k) {
+                var g = st.get(k);
+                g.onsuccess = function () {
+                    var list = parseChatList(typeof g.result === 'string' ? g.result : '[]');
+                    if (k === 'chats') rep.db = list; else if (k.indexOf('snap:') === 0) rep.snaps.push({ key: k, day: k.slice(5), list: list });
+                    if (--left === 0) { rep.snaps.sort(function (x, y) { return x.day < y.day ? 1 : -1; }); done(rep); }
+                };
+                g.onerror = function () { if (--left === 0) done(rep); };
+            });
+        };
+        kr.onerror = function () { done(rep); };
+    } catch (e) { done(rep); }
+}
+function describeChats(list) {
+    if (!list || !list.length) return 'no chats';
+    return list.length + ' chat' + (list.length === 1 ? '' : 's') + ', ' + countMsgs(list) + ' messages';
+}
+function openChatStorage() {
+    chatStorageReport(function (rep) {
+        var rows = rep.now.slice().sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); }).map(function (c) {
+            var first = c.messages[0] && c.messages[0].at, lastAt = c.updated;
+            return '<div class="list-row"><div><p class="lr-t">' + esc(c.title) + '</p><p class="lr-s">' + c.messages.length + ' messages' +
+                (lastAt ? ' · last ' + new Date(lastAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '') + '</p></div></div>';
+        }).join('') || '<p class="small muted">No chats saved on this phone.</p>';
+        var snaps = rep.snaps.map(function (sn) {
+            return '<div class="list-row"><div><p class="lr-t">' + formatDate(sn.day) + '</p><p class="lr-s">' + describeChats(sn.list) + '</p></div>' +
+                '<button class="btn btn-line btn-sm" data-act="restoreSnap" data-key="' + esc(sn.key) + '">Restore</button></div>';
+        }).join('') || '<p class="small muted">No daily backups yet. The first one is taken the day after a chat is saved.</p>';
+        var html = '<div class="sheet-head"><p class="eyebrow">Coach</p><h3 class="title" style="font-size:1.6rem">Chat storage</h3></div>' +
+            '<p class="label mt-16 mb-8">On this phone now</p><div class="list">' + rows + '</div>' +
+            '<p class="label mt-16 mb-8">Daily backups (last ' + SNAP_KEEP + ' days)</p><div class="list">' + snaps + '</div>' +
+            '<p class="small muted mt-8">Restore adds a backup\'s chats and messages back. It never removes anything.</p>' +
+            '<p class="label mt-16 mb-8">Details</p><p class="small mono muted" id="chat-storage-details">' +
+            'Version ' + esc(rep.build) + '<br>Main storage: ' + (rep.db ? describeChats(rep.db) : 'not available (' + esc(rep.mode) + ')') +
+            '<br>Second copy: ' + describeChats(rep.copy) + '<br>Backups: ' + rep.snaps.length + '</p>' +
+            '<button class="btn btn-ghost btn-block mt-16" data-act="closeSheet">Close</button>';
+        Sheet.open(html);
+    });
+}
+function restoreSnap(key) {
+    if (!_chatDB) return;
+    var g = _chatDB.transaction('kv', 'readonly').objectStore('kv').get(key);
+    g.onsuccess = function () {
+        var list = parseChatList(typeof g.result === 'string' ? g.result : '[]');
+        list.forEach(function (c) { if (c && c.id) delete _tomb[c.id]; });
+        saveTomb();
+        var before = countMsgs(loadChats());
+        _chatsJSON = JSON.stringify(mergeChatLists(list, loadChats()));
+        persistChats(function () {
+            var gained = countMsgs(loadChats()) - before;
+            Sheet.closeTop();
+            Sound.play('success');
+            toast(gained > 0 ? 'Restored ' + gained + ' messages.' : 'Nothing to restore. Everything in that backup is already here.', 'good');
+            refreshCoachUI(); if (!coachBusy && coachChatId) openChat(coachChatId);
+        });
+    };
 }
 function getChat(id) { var c = loadChats(); for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i]; return null; }
 function putChat(chat) {
@@ -4297,7 +4468,7 @@ function renameChat(id) {
 function deleteChat(id) {
     var chat = getChat(id); if (!chat) return;
     appConfirm({ title: 'Delete this chat?', body: '"' + chat.title + '" will be deleted from this phone.', yes: 'Delete', danger: true, icon: 'trash' }, function () {
-        saveChats(loadChats().filter(function (c) { return c.id !== id; }));
+        removeChat(id);
         if (coachChatId === id) openChat(null);
         Sound.play('delete');
         renderChatList();
@@ -4423,8 +4594,9 @@ function renderCoach() {
     byId('ai-no-key').classList.toggle('hidden', hasKey);
     byId('coach-model-label').textContent = 'Coach · ' + coachModelName();
     var chat = coachChatId ? getChat(coachChatId) : null;
-    byId('coach-title').textContent = chat ? chat.title : 'New chat';
+    byId('coach-title').textContent = !_chatsReady ? 'Loading your chat...' : (chat ? chat.title : 'New chat');
     var sg = byId('coach-suggest');
+    if (!_chatsReady) { sg.classList.add('hidden'); return; }
     if (!aiChatHistory.length) {
         sg.innerHTML = '<p class="label mb-8">Suggestions</p>' + SUGGESTIONS.map(function (q) { return '<button data-act="coachSuggest" data-q="' + esc(q) + '">' + esc(q) + '</button>'; }).join('');
         sg.classList.remove('hidden');
@@ -4547,7 +4719,9 @@ function estTokens(str) { return Math.ceil((str || '').length / 3.2); }
 function msgDate(m) { return m.at ? new Date(m.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
 // What the API receives: role and text only, with the date in front of the athlete's messages.
 function apiMessages(chat) {
-    return chat.messages.slice(chat.summaryUpTo || 0).map(function (m) {
+    var start = chat.summaryUpTo || 0;
+    while (start < chat.messages.length - 1 && chat.messages[start].role !== 'user') start++;
+    return chat.messages.slice(start).map(function (m) {
         return { role: m.role, content: (m.role === 'user' && m.at ? '[' + msgDate(m) + '] ' : '') + m.content };
     });
 }
@@ -4677,7 +4851,7 @@ function sendCoachMessage(text) {
         if (c) {
             c.messages.pop();
             if (c.messages.length) putChat(c);
-            else { saveChats(loadChats().filter(function (x) { return x.id !== chatId; })); if (stillOpen()) setCurrentChat(null); }
+            else { removeChat(chatId); if (stillOpen()) setCurrentChat(null); }
         }
         if (stillOpen()) {
             bubble.classList.add('err');
@@ -4807,6 +4981,9 @@ var ACTIONS = {
     saveProfile: saveProfileSettings, savePrefs: savePreferenceSettings, saveKey: saveClaudeKey,
     resetOnboarding: resetOnboarding,
     removePreloaded: removePreloaded,
+    openChatStorage: openChatStorage,
+    restoreSnap: function (el) { restoreSnap(el.getAttribute('data-key')); },
+    closeSheet: function () { Sheet.closeTop(); },
     setTrainingMode: function (el) { setTrainingMode(el.getAttribute('data-mode')); },
     settingsDayCount: function (el) { settingsSelectDayCount(parseInt(el.getAttribute('data-n'), 10)); },
     saveProgram: saveProgramSettings,
